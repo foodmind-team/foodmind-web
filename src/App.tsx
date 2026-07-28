@@ -1,459 +1,263 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import {
   ArrowRight,
-  BarChart3,
   Bell,
-  BookmarkPlus,
-  CalendarDays,
+  Bookmark,
   Check,
   ChefHat,
   Clock3,
   Compass,
-  Flame,
+  Heart,
   Home,
   Leaf,
-  MessageCircle,
+  MapPin,
+  PackageOpen,
   Plus,
-  RefreshCcw,
+  RotateCcw,
   Search,
+  Send,
   Sparkles,
   Star,
+  UserRound,
   Users,
-  UtensilsCrossed,
-  X,
+  Utensils,
+  WalletCards,
+  WandSparkles,
 } from 'lucide-react'
 import './App.css'
 
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>
+type Mode = 'recommend' | 'cook'
+type Section = 'home' | 'groups' | 'explore' | 'saved' | 'profile'
 
-const navigation: Array<{ label: string; icon: Icon }> = [
-  { label: 'Today', icon: Home },
-  { label: 'Discover', icon: Compass },
-  { label: 'My plan', icon: CalendarDays },
-  { label: 'Groups', icon: Users },
-  { label: 'Progress', icon: BarChart3 },
+const navigation: Array<{ id: Section; label: string; icon: Icon }> = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'groups', label: 'Groups', icon: Users },
+  { id: 'explore', label: 'Explore', icon: Compass },
+  { id: 'saved', label: 'Saved', icon: Bookmark },
+  { id: 'profile', label: 'Me', icon: UserRound },
 ]
 
-const recommendations = [
+const restaurantResults = [
   {
-    eyebrow: 'A good fit for tonight',
-    title: 'Miso salmon rice bowl',
+    name: 'Soi 38',
+    category: 'Thai · Dine in',
+    eta: '12 min away',
+    price: '$$',
+    match: '92% group match',
     description:
-      'Bright, comforting, and built around the salmon already in your fridge.',
-    time: '25 min',
-    calories: '560 kcal',
-    protein: '38g protein',
-    reason: 'Matches your high-protein goal',
-    ingredients: ['salmon', 'edamame', 'brown rice'],
-    color: 'coral',
+      'A lively neighbourhood spot with shareable plates, strong vegetarian choices, and the spicy food Jules keeps voting for.',
+    signals: ['3 members saved Thai', 'Works for Maya’s budget', 'Open until 10:30'],
+    tone: 'thai',
+    initials: 'S38',
   },
   {
-    eyebrow: 'Quick weeknight idea',
-    title: 'Ginger tofu noodle salad',
+    name: 'Nori Table',
+    category: 'Japanese · Delivery',
+    eta: '28–35 min',
+    price: '$$',
+    match: '89% group match',
     description:
-      'Crunchy vegetables, a punchy dressing, and almost no washing up.',
-    time: '20 min',
-    calories: '510 kcal',
-    protein: '27g protein',
-    reason: 'Uses 4 items you already have',
-    ingredients: ['tofu', 'noodles', 'cucumber'],
-    color: 'lime',
-  },
-  {
-    eyebrow: 'A cozy fallback',
-    title: 'Tomato lentil shakshuka',
-    description:
-      'A one-pan dinner that keeps your week balanced without feeling worthy.',
-    time: '30 min',
-    calories: '485 kcal',
-    protein: '24g protein',
-    reason: 'High fibre and under your budget',
-    ingredients: ['lentils', 'eggs', 'tomatoes'],
-    color: 'amber',
+      'Reliable delivery, easy customisation, and enough variety for the group without making everyone browse for twenty minutes.',
+    signals: ['Sam rated it 4.8', 'No shellfish options', 'Free group delivery'],
+    tone: 'nori',
+    initials: 'NT',
   },
 ]
 
-const meals = [
+const cookingResults = [
   {
-    time: '8:10',
-    period: 'AM',
-    title: 'Greek yoghurt & berries',
-    meta: 'Breakfast · 320 kcal',
-    tone: 'berry',
-    emoji: '◒',
+    name: 'Ginger miso salmon bowls',
+    category: '4 servings · One-pan plan',
+    eta: '28 min',
+    price: 'Uses 7 pantry items',
+    match: 'Low-waste match',
+    description:
+      'Roast the salmon and greens together, warm the rice, then finish with a five-minute ginger miso dressing.',
+    signals: ['Uses salmon tonight', 'High-protein', 'Only 2 items to buy'],
+    tone: 'cook',
+    initials: 'GM',
+  },
+]
+
+const explorePosts = [
+  {
+    title: 'The 15-minute dumpling soup our group keeps making',
+    author: 'Jules Lim',
+    meta: '12 min read',
+    likes: 284,
+    tone: 'dumpling',
+    tag: 'Quick dinner',
   },
   {
-    time: '12:35',
-    period: 'PM',
-    title: 'Chicken soba salad',
-    meta: 'Lunch · 540 kcal',
-    tone: 'leaf',
-    emoji: '≋',
+    title: 'Three quiet cafés for a long Saturday catch-up',
+    author: 'Nadia K.',
+    meta: 'Tiong Bahru',
+    likes: 418,
+    tone: 'cafe',
+    tag: 'Places',
+  },
+  {
+    title: 'What I order when everyone wants something different',
+    author: 'Sam Koh',
+    meta: 'Group-tested',
+    likes: 197,
+    tone: 'table',
+    tag: 'Ordering',
+  },
+  {
+    title: 'Six fridge staples that rescue a weeknight dinner',
+    author: 'Mina P.',
+    meta: 'Pantry guide',
+    likes: 356,
+    tone: 'pantry',
+    tag: 'Cooking',
   },
 ]
 
 function App() {
-  const [recommendationIndex, setRecommendationIndex] = useState(0)
-  const [planned, setPlanned] = useState(false)
-  const [modal, setModal] = useState<string | null>(null)
+  const [mode, setMode] = useState<Mode>('recommend')
+  const [section, setSection] = useState<Section>('home')
+  const [generating, setGenerating] = useState(false)
+  const [generated, setGenerated] = useState(false)
+  const [resultIndex, setResultIndex] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
-  const recommendation = recommendations[recommendationIndex]
+
+  const result =
+    mode === 'recommend'
+      ? restaurantResults[resultIndex % restaurantResults.length]
+      : cookingResults[0]
 
   useEffect(() => {
     if (!notice) return
-    const timer = window.setTimeout(() => setNotice(null), 3200)
+    const timer = window.setTimeout(() => setNotice(null), 3000)
     return () => window.clearTimeout(timer)
   }, [notice])
 
-  const chooseAnother = () => {
-    setPlanned(false)
-    setRecommendationIndex((current) => (current + 1) % recommendations.length)
-    setNotice('Fresh idea, based on the same preferences.')
+  const switchMode = (nextMode: Mode) => {
+    setMode(nextMode)
+    setSection('home')
+    setGenerated(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const addToPlan = () => {
-    setPlanned(true)
-    setNotice(`${recommendation.title} is in your dinner plan.`)
+  const generate = () => {
+    setGenerating(true)
+    setGenerated(false)
+    window.setTimeout(() => {
+      setGenerating(false)
+      setGenerated(true)
+    }, 850)
   }
 
-  const openFlow = (title: string) => setModal(title)
+  const tryAnother = () => {
+    if (mode === 'recommend') {
+      setResultIndex((current) => current + 1)
+      setNotice('A fresh option, using the same group context.')
+      return
+    }
+    setNotice('The cooking plan has been refreshed around the same pantry.')
+  }
 
-  const completeFlow = () => {
-    const action = modal
-    setModal(null)
-    setNotice(`${action} saved — nice work, Maya.`)
+  const changeSection = (nextSection: Section) => {
+    setSection(nextSection)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
-        <a className="brand" href="#main-content" aria-label="FoodMind home">
+    <div className="app">
+      <header className="app-header">
+        <button
+          className="brand"
+          type="button"
+          onClick={() => changeSection('home')}
+          aria-label="Go to FoodMind home"
+        >
           <span className="brand-mark">
-            <Leaf size={20} strokeWidth={2.6} />
+            <Leaf size={19} strokeWidth={2.6} />
           </span>
           <span>FoodMind</span>
-        </a>
+        </button>
 
-        <nav className="side-navigation">
-          {navigation.map(({ label, icon: NavigationIcon }, index) => (
-            <button
-              className={`nav-item ${index === 0 ? 'active' : ''}`}
-              type="button"
-              key={label}
-              aria-current={index === 0 ? 'page' : undefined}
-              onClick={() =>
-                index === 0
-                  ? window.scrollTo({ top: 0, behavior: 'smooth' })
-                  : setNotice(
-                      `${label} is mapped into the UX system; this prototype spotlights Today.`,
-                    )
-              }
-            >
-              <NavigationIcon size={20} strokeWidth={2} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-tip">
-          <div className="tip-icon">
-            <Sparkles size={18} />
-          </div>
-          <p>FoodMind gets sharper each time you log or rate a meal.</p>
-          <button type="button" onClick={() => openFlow('Tune my preferences')}>
-            Tune my preferences <ArrowRight size={14} />
+        <div className="mode-switch" role="group" aria-label="Choose recommendation mode">
+          <button
+            type="button"
+            className={mode === 'recommend' ? 'active' : ''}
+            aria-pressed={mode === 'recommend'}
+            onClick={() => switchMode('recommend')}
+          >
+            <Utensils size={16} />
+            <span>Eat out & delivery</span>
+          </button>
+          <button
+            type="button"
+            className={mode === 'cook' ? 'active' : ''}
+            aria-pressed={mode === 'cook'}
+            onClick={() => switchMode('cook')}
+          >
+            <ChefHat size={16} />
+            <span>Cooking</span>
           </button>
         </div>
 
-        <button
-          className="profile-chip"
-          type="button"
-          onClick={() => openFlow('Profile')}
-          aria-label="Open Maya's profile"
-        >
-          <span className="avatar">M</span>
-          <span>
-            <strong>Maya Chen</strong>
-            <small>Free plan</small>
-          </span>
-          <span className="profile-arrow">›</span>
-        </button>
-      </aside>
+        <div className="header-actions">
+          <button className="header-icon search-action" type="button" aria-label="Search">
+            <Search size={19} />
+          </button>
+          <button className="header-icon" type="button" aria-label="Notifications">
+            <Bell size={19} />
+            <span className="notification-dot" />
+          </button>
+          <button
+            className="avatar-button"
+            type="button"
+            onClick={() => changeSection('profile')}
+            aria-label="Open Maya's profile"
+          >
+            M
+          </button>
+        </div>
+      </header>
 
-      <div className="workspace">
-        <header className="topbar">
-          <div className="mobile-brand">
-            <span className="brand-mark">
-              <Leaf size={18} strokeWidth={2.6} />
-            </span>
-            <span>FoodMind</span>
-          </div>
+      <main>
+        {section === 'home' && (
+          <HomePage
+            mode={mode}
+            generating={generating}
+            generated={generated}
+            result={result}
+            onGenerate={generate}
+            onTryAnother={tryAnother}
+            onNotice={setNotice}
+            onOpenGroups={() => changeSection('groups')}
+            onOpenExplore={() => changeSection('explore')}
+          />
+        )}
+        {section === 'groups' && (
+          <GroupsPage
+            onNotice={setNotice}
+            onGenerate={() => {
+              setMode('recommend')
+              setSection('home')
+              setGenerated(false)
+            }}
+          />
+        )}
+        {section === 'explore' && <ExplorePage onNotice={setNotice} />}
+        {section === 'saved' && <SavedPage onNotice={setNotice} />}
+        {section === 'profile' && <ProfilePage onNotice={setNotice} />}
+      </main>
 
-          <label className="search">
-            <Search size={18} />
-            <span className="sr-only">Search FoodMind</span>
-            <input placeholder="Search meals, recipes, or people" />
-            <kbd>⌘ K</kbd>
-          </label>
-
-          <div className="topbar-actions">
-            <button className="icon-button" type="button" aria-label="Notifications">
-              <Bell size={19} />
-              <span className="notification-dot" />
-            </button>
-            <button
-              className="primary-button top-log"
-              type="button"
-              onClick={() => openFlow('Log a meal')}
-            >
-              <Plus size={18} />
-              Log a meal
-            </button>
-          </div>
-        </header>
-
-        <main id="main-content" className="main-content">
-          <section className="page-heading">
-            <div>
-              <p className="eyebrow">Tuesday, 28 July</p>
-              <h1>Good afternoon, Maya.</h1>
-              <p className="page-subtitle">
-                You’re on track today. Let’s make dinner the easy part.
-              </p>
-            </div>
-            <button
-              className="primary-button mobile-log"
-              type="button"
-              onClick={() => openFlow('Log a meal')}
-            >
-              <Plus size={18} />
-              Log meal
-            </button>
-          </section>
-
-          <div className="dashboard-grid">
-            <div className="dashboard-main">
-              <section className="recommendation-card" aria-labelledby="dinner-title">
-                <div className={`food-visual ${recommendation.color}`} aria-hidden="true">
-                  <span className="plate">
-                    <span className="food-piece piece-one" />
-                    <span className="food-piece piece-two" />
-                    <span className="food-piece piece-three" />
-                    <span className="food-garnish" />
-                  </span>
-                  <span className="visual-label">DINNER · FOR YOU</span>
-                </div>
-
-                <div className="recommendation-copy">
-                  <div>
-                    <p className="card-eyebrow">
-                      <Sparkles size={15} />
-                      {recommendation.eyebrow}
-                    </p>
-                    <h2 id="dinner-title">{recommendation.title}</h2>
-                    <p className="recommendation-description">
-                      {recommendation.description}
-                    </p>
-                  </div>
-
-                  <div className="meal-meta" aria-label="Meal details">
-                    <span>
-                      <Clock3 size={15} /> {recommendation.time}
-                    </span>
-                    <span>
-                      <Flame size={15} /> {recommendation.calories}
-                    </span>
-                    <span>{recommendation.protein}</span>
-                  </div>
-
-                  <div className="why-row">
-                    <Check size={15} />
-                    <span>{recommendation.reason}</span>
-                  </div>
-
-                  <div className="recommendation-actions">
-                    <button
-                      className={`light-button ${planned ? 'confirmed' : ''}`}
-                      type="button"
-                      onClick={addToPlan}
-                    >
-                      {planned ? <Check size={17} /> : <ChefHat size={17} />}
-                      {planned ? 'Added to tonight' : 'Make this tonight'}
-                    </button>
-                    <button className="ghost-light-button" type="button" onClick={chooseAnother}>
-                      <RefreshCcw size={16} />
-                      Something else
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <section className="quick-section" aria-labelledby="quick-actions-title">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">Shortcuts</p>
-                    <h2 id="quick-actions-title">What do you need?</h2>
-                  </div>
-                </div>
-                <div className="quick-grid">
-                  <QuickAction
-                    icon={UtensilsCrossed}
-                    title="Log food"
-                    description="Add a meal in seconds"
-                    tone="mint"
-                    onClick={() => openFlow('Log a meal')}
-                  />
-                  <QuickAction
-                    icon={ChefHat}
-                    title="Plan dinner"
-                    description="Use what you have"
-                    tone="peach"
-                    onClick={() => openFlow('Plan dinner')}
-                  />
-                  <QuickAction
-                    icon={MessageCircle}
-                    title="Ask FoodMind"
-                    description="Talk through a choice"
-                    tone="lilac"
-                    onClick={() => openFlow('Ask FoodMind')}
-                  />
-                  <QuickAction
-                    icon={BookmarkPlus}
-                    title="Want to try"
-                    description="Save something tasty"
-                    tone="butter"
-                    onClick={() => openFlow('Want to try')}
-                  />
-                </div>
-              </section>
-
-              <section className="card today-card" aria-labelledby="today-title">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">28 July</p>
-                    <h2 id="today-title">Today’s meals</h2>
-                  </div>
-                  <button className="text-button" type="button" onClick={() => openFlow('Meal history')}>
-                    See history <ArrowRight size={15} />
-                  </button>
-                </div>
-
-                <div className="meal-list">
-                  {meals.map((meal) => (
-                    <div className="meal-row" key={meal.title}>
-                      <div className="meal-time">
-                        <strong>{meal.time}</strong>
-                        <span>{meal.period}</span>
-                      </div>
-                      <div className={`meal-thumbnail ${meal.tone}`} aria-hidden="true">
-                        {meal.emoji}
-                      </div>
-                      <div className="meal-name">
-                        <strong>{meal.title}</strong>
-                        <span>{meal.meta}</span>
-                      </div>
-                      <button
-                        className="row-action"
-                        type="button"
-                        aria-label={`Open ${meal.title}`}
-                        onClick={() => openFlow(meal.title)}
-                      >
-                        ›
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    className="add-inline"
-                    type="button"
-                    onClick={() => openFlow('Log a meal')}
-                  >
-                    <Plus size={17} /> Add a snack or drink
-                  </button>
-                </div>
-              </section>
-            </div>
-
-            <aside className="dashboard-aside" aria-label="Weekly insights">
-              <section className="card balance-card" aria-labelledby="balance-title">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">Weekly balance</p>
-                    <h2 id="balance-title">A steady week</h2>
-                  </div>
-                  <button className="icon-button subtle" type="button" aria-label="Weekly balance options">
-                    ···
-                  </button>
-                </div>
-
-                <div className="score-wrap">
-                  <div className="score-ring" role="img" aria-label="Weekly balance score 78 out of 100">
-                    <div>
-                      <strong>78</strong>
-                      <span>of 100</span>
-                    </div>
-                  </div>
-                  <div className="score-copy">
-                    <strong>Nicely balanced</strong>
-                    <p>More vegetables at dinner would lift your variety.</p>
-                  </div>
-                </div>
-
-                <div className="progress-list">
-                  <Progress label="Protein" value="82%" percentage={82} tone="green" />
-                  <Progress label="Plants" value="6 / 8" percentage={75} tone="orange" />
-                  <Progress label="Water" value="5 / 7" percentage={71} tone="blue" />
-                </div>
-
-                <button className="secondary-button" type="button" onClick={() => openFlow('Weekly insights')}>
-                  View weekly insights <ArrowRight size={16} />
-                </button>
-              </section>
-
-              <section className="card friend-card" aria-labelledby="friend-title">
-                <div className="friend-top">
-                  <div className="avatar-stack" aria-hidden="true">
-                    <span>JL</span>
-                    <span>SK</span>
-                    <span>AN</span>
-                  </div>
-                  <span className="live-label">3 new</span>
-                </div>
-                <p className="eyebrow">Kitchen table</p>
-                <h2 id="friend-title">Your group is cooking</h2>
-                <p>Jules shared a 15-minute dumpling soup. Sam saved it too.</p>
-                <button className="text-button" type="button" onClick={() => openFlow('Kitchen table')}>
-                  See group activity <ArrowRight size={15} />
-                </button>
-              </section>
-
-              <section className="micro-card">
-                <span className="micro-icon">
-                  <Star size={18} />
-                </span>
-                <div>
-                  <strong>Small win</strong>
-                  <p>You’ve cooked at home 3 times this week.</p>
-                </div>
-              </section>
-            </aside>
-          </div>
-        </main>
-      </div>
-
-      <nav className="mobile-navigation" aria-label="Mobile navigation">
-        {navigation.map(({ label, icon: NavigationIcon }, index) => (
+      <nav className="bottom-navigation" aria-label="Primary navigation">
+        {navigation.map(({ id, label, icon: NavigationIcon }) => (
           <button
             type="button"
-            className={index === 0 ? 'active' : ''}
-            aria-current={index === 0 ? 'page' : undefined}
-            key={label}
-            onClick={() =>
-              index === 0
-                ? window.scrollTo({ top: 0, behavior: 'smooth' })
-                : setNotice(`${label} is the next mapped screen in this UX prototype.`)
-            }
+            className={section === id ? 'active' : ''}
+            aria-current={section === id ? 'page' : undefined}
+            onClick={() => changeSection(id)}
+            key={id}
           >
-            <NavigationIcon size={20} />
+            <NavigationIcon size={20} strokeWidth={2.1} />
             <span>{label}</span>
           </button>
         ))}
@@ -465,108 +269,543 @@ function App() {
           {notice}
         </div>
       )}
+    </div>
+  )
+}
 
-      {modal && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setModal(null)}>
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              type="button"
-              onClick={() => setModal(null)}
-              aria-label="Close dialog"
-            >
-              <X size={20} />
-            </button>
-            <span className="modal-icon">
-              {modal === 'Ask FoodMind' ? <MessageCircle size={22} /> : <Sparkles size={22} />}
+function HomePage({
+  mode,
+  generating,
+  generated,
+  result,
+  onGenerate,
+  onTryAnother,
+  onNotice,
+  onOpenGroups,
+  onOpenExplore,
+}: {
+  mode: Mode
+  generating: boolean
+  generated: boolean
+  result: (typeof restaurantResults)[number]
+  onGenerate: () => void
+  onTryAnother: () => void
+  onNotice: (notice: string) => void
+  onOpenGroups: () => void
+  onOpenExplore: () => void
+}) {
+  const isRecommend = mode === 'recommend'
+
+  return (
+    <div className="page home-page">
+      <section className="home-heading">
+        <p className="eyebrow">{isRecommend ? 'Tonight · Kitchen Table' : 'Tonight · Your kitchen'}</p>
+        <h1>{isRecommend ? 'Dinner, decided together.' : 'Cook with what you have.'}</h1>
+        <p>
+          {isRecommend
+            ? 'One recommendation, shaped by your group—not another endless list.'
+            : 'Turn your current pantry, time, and preferences into one practical cooking plan.'}
+        </p>
+      </section>
+
+      <section className={`generator-card ${isRecommend ? 'recommend-mode' : 'cook-mode'}`}>
+        <div className="generator-glow" aria-hidden="true" />
+        <div className="generator-context">
+          <div className="context-heading">
+            <span className="context-icon">
+              {isRecommend ? <Users size={19} /> : <PackageOpen size={19} />}
             </span>
-            <p className="eyebrow">Quick flow preview</p>
-            <h2 id="modal-title">{modal}</h2>
-            <p>
-              {modal === 'Ask FoodMind'
-                ? 'What are you deciding? FoodMind can compare options using your goals and recent meals.'
-                : 'The full flow keeps the first decision simple and asks for detail only when it helps.'}
-            </p>
-            <label>
-              <span>{modal === 'Ask FoodMind' ? 'Your question' : 'Add a note (optional)'}</span>
-              <input
-                autoFocus
-                placeholder={
-                  modal === 'Ask FoodMind'
-                    ? 'Is pasta or rice a better fit tonight?'
-                    : 'Anything you want to remember?'
-                }
-              />
-            </label>
-            <div className="modal-actions">
-              <button className="secondary-button" type="button" onClick={() => setModal(null)}>
-                Cancel
-              </button>
-              <button className="primary-button" type="button" onClick={completeFlow}>
-                {modal === 'Ask FoodMind' ? 'Start chat' : 'Save'}
+            <div>
+              <p>{isRecommend ? 'Recommending for' : 'Planning from'}</p>
+              <strong>{isRecommend ? 'Kitchen Table · 4 people' : 'Maya’s pantry · 12 items'}</strong>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onNotice(isRecommend ? 'Group context is ready to edit.' : 'Pantry inventory is ready to edit.')
+              }
+            >
+              Edit
+            </button>
+          </div>
+
+          <div className="member-signal">
+            {isRecommend ? (
+              <>
+                <div className="avatar-stack" aria-label="Maya, Jules, Sam, and Nadia">
+                  <span>MC</span>
+                  <span>JL</span>
+                  <span>SK</span>
+                  <span>NK</span>
+                </div>
+                <p>
+                  <strong>62 shared ratings</strong>
+                  <span>Enough signal for tonight</span>
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="pantry-stack" aria-hidden="true">
+                  <span>Salmon</span>
+                  <span>Rice</span>
+                  <span>Greens</span>
+                </div>
+                <p>
+                  <strong>3 items should be used soon</strong>
+                  <span>Salmon expires tomorrow</span>
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="context-grid" aria-label="Recommendation context">
+            <ContextItem icon={Clock3} label={isRecommend ? 'When' : 'Time'} value={isRecommend ? 'Tonight · 7 PM' : 'Under 35 min'} />
+            <ContextItem icon={MapPin} label={isRecommend ? 'Range' : 'Serves'} value={isRecommend ? 'Within 3 km' : '4 people'} />
+            <ContextItem icon={WalletCards} label={isRecommend ? 'Budget' : 'Extra spend'} value={isRecommend ? '$$ · about $25' : 'Under $12'} />
+            <ContextItem icon={Sparkles} label="Must work for" value={isRecommend ? 'No shellfish' : 'High protein'} />
+          </div>
+        </div>
+
+        <div className="generator-action">
+          <span className="hero-symbol" aria-hidden="true">
+            {isRecommend ? <MapPin size={34} /> : <ChefHat size={34} />}
+          </span>
+          <p className="generator-label">{isRecommend ? 'FoodMind recommendation' : 'FoodMind cooking plan'}</p>
+          <h2>
+            {isRecommend
+              ? 'Ready for one place everyone can say yes to?'
+              : 'Ready to turn those ingredients into dinner?'}
+          </h2>
+          <p>
+            {isRecommend
+              ? 'We combine personal history, group taste, distance, budget, and tonight’s constraints.'
+              : 'We prioritise what expires soon, then balance effort, nutrition, and your group’s preferences.'}
+          </p>
+          <button className="generate-button" type="button" onClick={onGenerate} disabled={generating}>
+            {generating ? (
+              <>
+                <span className="spinner" aria-hidden="true" />
+                {isRecommend ? 'Finding your best match…' : 'Building your plan…'}
+              </>
+            ) : (
+              <>
+                <WandSparkles size={20} />
+                {isRecommend ? 'Generate recommendation' : 'Generate cooking plan'}
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+          <small>{isRecommend ? 'One strong answer, with reasons you can inspect.' : 'A complete plan, not just a recipe link.'}</small>
+        </div>
+      </section>
+
+      {generated && (
+        <section className="result-card" aria-live="polite">
+          <div className={`result-visual ${result.tone}`} aria-hidden="true">
+            <span>{result.initials}</span>
+            <small>{isRecommend ? 'TONIGHT’S MATCH' : 'TONIGHT’S PLAN'}</small>
+          </div>
+          <div className="result-copy">
+            <div className="result-topline">
+              <span className="match-pill">
+                <Sparkles size={14} /> {result.match}
+              </span>
+              <button
+                className="save-button"
+                type="button"
+                onClick={() => onNotice(`${result.name} has been saved.`)}
+                aria-label={`Save ${result.name}`}
+              >
+                <Bookmark size={18} />
               </button>
             </div>
-          </section>
-        </div>
+            <p className="eyebrow">{result.category}</p>
+            <h2>{result.name}</h2>
+            <div className="result-meta">
+              <span>
+                <Clock3 size={15} /> {result.eta}
+              </span>
+              <span>{result.price}</span>
+            </div>
+            <p className="result-description">{result.description}</p>
+            <div className="signal-list">
+              {result.signals.map((signal) => (
+                <span key={signal}>
+                  <Check size={14} /> {signal}
+                </span>
+              ))}
+            </div>
+            <div className="result-actions">
+              <button
+                className="primary-action"
+                type="button"
+                onClick={() =>
+                  onNotice(isRecommend ? `${result.name} is ready to share with the group.` : 'Cooking plan added to tonight.')
+                }
+              >
+                {isRecommend ? <Send size={17} /> : <ChefHat size={17} />}
+                {isRecommend ? 'Share with group' : 'Start cooking'}
+              </button>
+              <button className="secondary-action" type="button" onClick={onTryAnother}>
+                <RotateCcw size={16} /> Try another
+              </button>
+            </div>
+          </div>
+        </section>
       )}
+
+      <div className="support-grid">
+        <section className="group-card">
+          <div className="section-topline">
+            <div>
+              <p className="eyebrow">Core group</p>
+              <h2>Kitchen Table</h2>
+            </div>
+            <button className="text-button" type="button" onClick={onOpenGroups}>
+              Open group <ArrowRight size={15} />
+            </button>
+          </div>
+          <p className="section-support">Shared tastes, saved places, votes, and recommendations live here.</p>
+          <div className="group-members">
+            <Member initials="MC" name="You" signal="22 ratings" tone="mint" />
+            <Member initials="JL" name="Jules" signal="18 ratings" tone="peach" />
+            <Member initials="SK" name="Sam" signal="14 ratings" tone="lilac" />
+            <Member initials="NK" name="Nadia" signal="8 ratings" tone="butter" />
+          </div>
+          <div className="group-activity">
+            <span className="activity-icon">
+              <Star size={18} />
+            </span>
+            <p>
+              <strong>Strongest shared signal</strong>
+              <span>Casual Asian food, $–$$, easy sharing</span>
+            </p>
+          </div>
+        </section>
+
+        <section className="learn-card">
+          <p className="eyebrow">Why it gets better</p>
+          <h2>Every choice teaches FoodMind.</h2>
+          <div className="learn-list">
+            <LearnItem number="01" title="Your history" detail="Ratings, saves, skips, and repeat orders" />
+            <LearnItem number="02" title="Group overlap" detail="Where everyone’s preferences intersect" />
+            <LearnItem number="03" title="Tonight’s context" detail="Budget, distance, time, and constraints" />
+          </div>
+        </section>
+      </div>
+
+      <section className="explore-preview">
+        <div className="section-topline">
+          <div>
+            <p className="eyebrow">From Explore</p>
+            <h2>Ideas worth passing around</h2>
+          </div>
+          <button className="text-button" type="button" onClick={onOpenExplore}>
+            Browse posts <ArrowRight size={15} />
+          </button>
+        </div>
+        <div className="preview-posts">
+          {explorePosts.slice(0, 3).map((post) => (
+            <PostCard post={post} onNotice={onNotice} key={post.title} compact />
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
 
-function QuickAction({
-  icon: ActionIcon,
-  title,
-  description,
-  tone,
-  onClick,
+function GroupsPage({
+  onNotice,
+  onGenerate,
 }: {
-  icon: Icon
-  title: string
-  description: string
-  tone: string
-  onClick: () => void
+  onNotice: (notice: string) => void
+  onGenerate: () => void
 }) {
   return (
-    <button className="quick-action" type="button" onClick={onClick}>
-      <span className={`quick-icon ${tone}`}>
-        <ActionIcon size={21} strokeWidth={2} />
-      </span>
-      <span>
-        <strong>{title}</strong>
-        <small>{description}</small>
-      </span>
-      <span className="quick-arrow">›</span>
-    </button>
+    <div className="page section-page">
+      <header className="section-page-heading">
+        <div>
+          <p className="eyebrow">Shared decisions</p>
+          <h1>Your groups</h1>
+          <p>Build shared taste over time, then let FoodMind find the overlap.</p>
+        </div>
+        <button className="primary-action" type="button" onClick={() => onNotice('Invite link copied.')}>
+          <Plus size={17} /> Create group
+        </button>
+      </header>
+
+      <section className="featured-group">
+        <div className="featured-group-copy">
+          <span className="group-label">
+            <Users size={15} /> Your most active group
+          </span>
+          <h2>Kitchen Table</h2>
+          <p>4 members · 62 shared ratings · 11 saved places</p>
+          <div className="avatar-stack large">
+            <span>MC</span>
+            <span>JL</span>
+            <span>SK</span>
+            <span>NK</span>
+          </div>
+          <button className="generate-button small" type="button" onClick={onGenerate}>
+            <WandSparkles size={18} /> Recommend for this group
+          </button>
+        </div>
+        <div className="vote-card">
+          <p className="eyebrow">Open vote · Dinner Friday</p>
+          <h3>Which direction feels right?</h3>
+          <VoteRow label="Thai sharing plates" votes={3} total={4} />
+          <VoteRow label="Japanese delivery" votes={2} total={4} />
+          <VoteRow label="Cook at Maya’s" votes={1} total={4} />
+          <button className="secondary-action full" type="button" onClick={() => onNotice('Your vote is recorded.')}>
+            Add your vote
+          </button>
+        </div>
+      </section>
+
+      <div className="group-list-grid">
+        <GroupListCard title="Lunch crew" members="5 members" signal="Fast lunches under $18" color="coral" />
+        <GroupListCard title="Family Sunday" members="6 members" signal="Quiet spaces, vegetarian-friendly" color="sage" />
+        <button className="new-group-card" type="button" onClick={() => onNotice('New group flow opened.')}>
+          <Plus size={22} />
+          <strong>Start another group</strong>
+          <span>Invite people and build a shared taste profile.</span>
+        </button>
+      </div>
+    </div>
   )
 }
 
-function Progress({
+function ExplorePage({ onNotice }: { onNotice: (notice: string) => void }) {
+  return (
+    <div className="page section-page">
+      <header className="section-page-heading explore-heading">
+        <div>
+          <p className="eyebrow">Community notes</p>
+          <h1>Explore what people are eating.</h1>
+          <p>Short reviews, useful lists, and honest food ideas from people you trust.</p>
+        </div>
+        <label className="explore-search">
+          <Search size={18} />
+          <span className="sr-only">Search posts</span>
+          <input placeholder="Search places, dishes, or lists" />
+        </label>
+      </header>
+
+      <div className="topic-row" aria-label="Explore topics">
+        {['For you', 'Near me', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés'].map((topic, index) => (
+          <button className={index === 0 ? 'active' : ''} type="button" key={topic}>
+            {topic}
+          </button>
+        ))}
+      </div>
+
+      <section className="post-grid">
+        {explorePosts.concat(explorePosts.slice(0, 2)).map((post, index) => (
+          <PostCard
+            post={{ ...post, title: index > 3 ? `${post.title} — saved edition` : post.title }}
+            onNotice={onNotice}
+            key={`${post.title}-${index}`}
+          />
+        ))}
+      </section>
+    </div>
+  )
+}
+
+function SavedPage({ onNotice }: { onNotice: (notice: string) => void }) {
+  return (
+    <div className="page section-page">
+      <header className="section-page-heading">
+        <div>
+          <p className="eyebrow">Your shortlist</p>
+          <h1>Saved for the right moment.</h1>
+          <p>Places, posts, and cooking ideas you or your groups want to try.</p>
+        </div>
+      </header>
+      <div className="saved-grid">
+        {restaurantResults.map((item) => (
+          <article className="saved-card" key={item.name}>
+            <div className={`saved-visual ${item.tone}`}>{item.initials}</div>
+            <div>
+              <p className="eyebrow">{item.category}</p>
+              <h2>{item.name}</h2>
+              <p>{item.description}</p>
+              <button className="text-button" type="button" onClick={() => onNotice(`${item.name} is ready to recommend.`)}>
+                Use in a recommendation <ArrowRight size={15} />
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ProfilePage({ onNotice }: { onNotice: (notice: string) => void }) {
+  return (
+    <div className="page section-page">
+      <header className="profile-heading">
+        <span className="profile-avatar">M</span>
+        <div>
+          <p className="eyebrow">Taste profile</p>
+          <h1>Maya Chen</h1>
+          <p>FoodMind has learned from 48 ratings, 16 saves, and 9 group decisions.</p>
+        </div>
+      </header>
+      <div className="profile-grid">
+        <section className="profile-card">
+          <p className="eyebrow">Strong signals</p>
+          <h2>Your taste, at a glance</h2>
+          <div className="taste-tags">
+            {['Spicy', 'Japanese', 'High protein', 'Casual', '$–$$', 'Under 30 min'].map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
+          </div>
+          <button className="secondary-action full" type="button" onClick={() => onNotice('Preference editor opened.')}>
+            Edit preferences
+          </button>
+        </section>
+        <section className="profile-card">
+          <p className="eyebrow">Learning controls</p>
+          <h2>You stay in control.</h2>
+          <p>Review or remove the signals FoodMind uses for recommendations.</p>
+          <button className="secondary-action full" type="button" onClick={() => onNotice('Recommendation history opened.')}>
+            Review recommendation history
+          </button>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function ContextItem({
+  icon: ContextIcon,
   label,
   value,
-  percentage,
-  tone,
 }: {
+  icon: Icon
   label: string
   value: string
-  percentage: number
+}) {
+  return (
+    <div className="context-item">
+      <ContextIcon size={17} />
+      <span>
+        <small>{label}</small>
+        <strong>{value}</strong>
+      </span>
+    </div>
+  )
+}
+
+function Member({
+  initials,
+  name,
+  signal,
+  tone,
+}: {
+  initials: string
+  name: string
+  signal: string
   tone: string
 }) {
   return (
-    <div className="progress-row">
+    <div className="member">
+      <span className={`member-avatar ${tone}`}>{initials}</span>
+      <strong>{name}</strong>
+      <small>{signal}</small>
+    </div>
+  )
+}
+
+function LearnItem({ number, title, detail }: { number: string; title: string; detail: string }) {
+  return (
+    <div className="learn-item">
+      <span>{number}</span>
+      <p>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </p>
+    </div>
+  )
+}
+
+function PostCard({
+  post,
+  onNotice,
+  compact = false,
+}: {
+  post: (typeof explorePosts)[number]
+  onNotice: (notice: string) => void
+  compact?: boolean
+}) {
+  return (
+    <article className={`post-card ${compact ? 'compact' : ''}`}>
+      <button
+        className={`post-visual ${post.tone}`}
+        type="button"
+        onClick={() => onNotice(`Opening “${post.title}”.`)}
+        aria-label={`Open post: ${post.title}`}
+      >
+        <span className="post-tag">{post.tag}</span>
+        <span className="post-shape shape-a" />
+        <span className="post-shape shape-b" />
+        <span className="post-shape shape-c" />
+      </button>
+      <div className="post-copy">
+        <h3>{post.title}</h3>
+        <div className="post-meta">
+          <span className="post-author">
+            <span>{post.author.charAt(0)}</span>
+            {post.author}
+          </span>
+          <button type="button" onClick={() => onNotice('Saved to your food ideas.')}>
+            <Heart size={14} /> {post.likes}
+          </button>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function VoteRow({ label, votes, total }: { label: string; votes: number; total: number }) {
+  return (
+    <div className="vote-row">
       <div>
         <span>{label}</span>
-        <strong>{value}</strong>
+        <strong>{votes}</strong>
       </div>
-      <div className="progress-track" aria-hidden="true">
-        <span className={tone} style={{ width: `${percentage}%` }} />
+      <div className="vote-track">
+        <span style={{ width: `${(votes / total) * 100}%` }} />
       </div>
     </div>
+  )
+}
+
+function GroupListCard({
+  title,
+  members,
+  signal,
+  color,
+}: {
+  title: string
+  members: string
+  signal: string
+  color: string
+}) {
+  return (
+    <article className={`group-list-card ${color}`}>
+      <span className="group-list-icon">
+        <Users size={20} />
+      </span>
+      <p className="eyebrow">{members}</p>
+      <h2>{title}</h2>
+      <p>{signal}</p>
+      <button type="button" aria-label={`Open ${title}`}>
+        <ArrowRight size={17} />
+      </button>
+    </article>
   )
 }
 

@@ -1,20 +1,29 @@
 # FoodMind responsive UX
 
-This prototype turns the FoodMind home screen into a decision-first “Today”
-experience. It is implemented in `src/App.tsx` and adapts from a desktop
-workspace to a touch-friendly mobile layout.
+The home experience is organized around two clear modes: **Eat out & delivery**
+and **Cooking**. Recommendation mode is the default and receives the strongest
+visual priority; Cooking reuses the same interaction pattern to turn pantry
+inventory into a practical meal plan.
 
 ## UX priorities
 
-- Put the most useful next decision—dinner—before secondary metrics.
-- Explain why a recommendation fits, then offer one clear action and one escape.
-- Keep meal logging, planning, chat, and Want to Try within one action.
-- Summarize weekly balance without guilt, alarms, or false precision.
-- Keep all controls keyboard-accessible and preserve visible focus states.
-- Replace the desktop sidebar with labeled bottom navigation on narrow screens.
+- Keep the mode switch visible at the top without competing with the main action.
+- Make “Generate recommendation” the unmistakable first action on the home page.
+- Explain how group preferences, personal history, budget, distance, and dietary
+  needs influenced a result.
+- Treat Groups as a core shared decision space, including active votes and member
+  signals.
+- Give Explore a Xiaohongshu-inspired post grid for restaurant finds, cooking
+  ideas, and community collections.
+- Keep Home, Groups, Explore, Saved, and Me available from persistent labeled
+  bottom navigation on desktop and mobile.
+- Preserve responsive behavior, keyboard focus, accessible labels, and reduced
+  motion support.
 
 ## Preview
 
-![FoodMind desktop dashboard](today-dashboard-web.png)
+![FoodMind recommendation home](today-dashboard-web.png)
 
-![FoodMind mobile web dashboard](today-dashboard-mobile-web.png)
+![FoodMind mobile recommendation home](today-dashboard-mobile-web.png)
+
+![FoodMind Explore feed](explore-feed-web.png)
