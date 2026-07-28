@@ -79,6 +79,10 @@ Mocks must not become a separate undocumented API design.
 
 Before a Pull Request:
 
+- Confirm **Eat out & delivery** is the default home mode and the primary generate action is visible without scrolling at supported mobile widths.
+- Switch to Cooking and confirm recommendation-specific group context is replaced by pantry/time/budget context.
+- Generate a recommendation, verify one lead result, then verify “try another” stays within the returned candidate set.
+- Navigate directly to Groups and Explore; verify private or inaccessible content never appears in Explore fixtures.
 - Test a supported Chromium browser.
 - Test keyboard-only interaction.
 - Check responsive widths.
