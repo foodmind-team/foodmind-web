@@ -3,6 +3,7 @@
 ## Goals
 
 - Present all confirmed FoodMind business capabilities in a responsive browser UI.
+- Make the recommendation decision the primary home-screen job while keeping Cooking one mode switch away.
 - Keep backend-owned rules and data authoritative.
 - Isolate features so team members can work independently.
 - Make loading, error, permission, and fallback states visible and testable.
@@ -103,13 +104,29 @@ Rules:
 The recommendation page must represent:
 
 - Context submitted by the user
-- Personal, Exploratory, and Group-inspired cards
+- Personal history and authorised trusted-group signals
+- The lead candidate as the single primary result
+- Personal, Exploratory, and Group-inspired alternatives returned in the same ordered candidate set
 - Grounded reason text and reason-code-derived badges
 - Model or fallback status
 - Accept, reject, and re-recommend actions
 - Rejection reason and later-rating workflows
 
 The UI must not infer a reason from a numeric model score.
+
+The backend contract still returns up to three intentionally different candidates. The
+home screen initially spotlights the highest-ranked candidate and lets the user move to
+another returned candidate without silently starting a new recommendation session.
+
+## Application Shell and Discovery
+
+- The top-level mode switch contains **Eat out & delivery** and **Cooking**.
+- Recommendation mode is selected by default and owns the strongest call to action.
+- Persistent labeled navigation contains Home, Groups, Explore, Saved, and Me.
+- Groups is the shared decision workspace for membership, votes, group history, and sharing a result.
+- Explore uses an image-led post grid, but its data remains limited to authorised group-visible records and curated platform content.
+- Public/follower feeds, public internet restaurant search, ordering, and payment remain outside the MVP.
+- The Cooking mode reads manually supplied or backend-provided pantry context; it must not imply automatic inventory capture.
 
 ## Chatbot UI
 

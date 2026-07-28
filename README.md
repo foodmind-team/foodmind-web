@@ -2,7 +2,7 @@
 
 FoodMind Web is the responsive browser client for FoodMind. It presents the same business capabilities as the native Android application and consumes only the public Spring Boot API.
 
-> **Current status:** Vite/React scaffold plus directory framework. The FoodMind screens, routing, API integration, query management, charts, and tests described below are not yet implemented.
+> **Current status:** the Vite/React repository includes a responsive recommendation-first UX prototype with the two-mode home shell, Groups, Explore, Saved, and profile views. Backend integration, production routing, query management, charts, authentication, and automated tests remain to be implemented.
 
 ## Responsibilities
 
@@ -13,9 +13,11 @@ The Web client is responsible for:
 - Food and drink record workflows
 - Personal history
 - Trusted groups, group feeds, and Want to Try
-- Recommendation context forms and result cards
+- A recommendation-first home with an **Eat out & delivery / Cooking** mode switch
+- One prominent recommendation action and a lead-result presentation backed by the ordered candidate set
 - Recommendation feedback
-- Cooking-plan input and results
+- Cooking-plan input and results from manually supplied pantry/inventory context
+- An authorised Explore surface for group-visible and curated platform posts
 - FoodMind Chatbot interactions
 - Dashboard and weekly recap presentation
 - Responsive layout, accessibility, and browser UX
@@ -109,8 +111,9 @@ Each feature owns its page components, feature-specific components, hooks, reque
 | `auth` | Login, registration, protected-route entry |
 | `profile` | User profile and preference management |
 | `records` | Food/drink create, edit, details, and history |
-| `groups` | Group membership, feed, visibility, and Want to Try |
-| `recommendations` | Context input, three result cards, and feedback |
+| `groups` | Group membership, shared decisions, feed, visibility, and Want to Try |
+| `explore` | Authorised group-visible and curated post discovery; no public follower feed in the MVP |
+| `recommendations` | Group/personal context, lead recommendation, alternate candidates, and feedback |
 | `cooking` | Ingredient/time/budget input and structured plan |
 | `chat` | Sessions, messages, references, summary, and comparison |
 | `analytics` | Dashboard charts and weekly recap |
@@ -177,6 +180,10 @@ See [local development](docs/operations/local-development.md).
 
 ## UI and Accessibility
 
+- The home header exposes **Eat out & delivery** and **Cooking** as two clear modes; recommendation mode is the default.
+- The first viewport contains one unmistakable **Generate recommendation** action.
+- The API may return three intentionally different candidates, while the UI spotlights one lead choice and exposes the others through an explicit “try another” action.
+- Groups and Explore remain first-class labeled destinations; Explore must not imply public access to private or group-only records.
 - Every form field has a visible label and associated error.
 - Keyboard navigation works for forms, dialogs, menus, and Chatbot controls.
 - Loading, empty, error, and offline states are explicit.
@@ -193,6 +200,7 @@ See [local development](docs/operations/local-development.md).
 - Accessibility checks for core pages
 - Contract fixtures generated from or verified against OpenAPI
 - End-to-end tests for UC-01 through UC-09
+- Shell tests for mode switching, primary recommendation generation, Groups navigation, and permission-safe Explore content
 - Permission/error-state scenarios shared with Android UAT
 
 ## Contribution Workflow
