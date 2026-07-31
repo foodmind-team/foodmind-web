@@ -11,12 +11,13 @@
     "api:snapshot": "node scripts/snapshot-api.mjs",
     "api:generate": "node scripts/generate-api.mjs",
     "api:check": "node scripts/check-api.mjs",
+    "api:coverage": "node scripts/check-api-coverage.mjs",
     "security:check": "node scripts/check-security.mjs",
     "bundle:check": "node scripts/check-bundle.mjs",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "validate": "npm run api:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
+    "validate": "npm run api:check && npm run api:coverage && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "preview": "vite preview"
   },
   "engines": {

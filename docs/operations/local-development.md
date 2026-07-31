@@ -30,11 +30,11 @@ npm run validate
 npm run test:e2e
 ```
 
-The deterministic unit/component/API suite uses synthetic MSW data. The browser suite intercepts only the documented `/api/v1` surface and checks authenticated routing, recommendation behavior, responsive layout, and core accessibility. Install Chromium once with `npx playwright install chromium` if the local Playwright cache is empty.
+The deterministic unit/component/API suite uses synthetic MSW data. The browser suite intercepts only the documented `/api/v1` surface and checks authenticated routing, recommendation behavior, URL-backed filters, mandatory responsive widths, data-rich analytics/record layouts, and WCAG 2.2 AA serious/critical findings across primary destinations. Its screenshots are written into `test-results/` for CI review. Install Chromium once with `npx playwright install chromium` if the local Playwright cache is empty.
 
 ## Backend contract workflow
 
-`contracts/backend-openapi-v1.yaml` is the accepted Web snapshot. `npm run api:check` regenerates into a temporary directory and fails on drift. An intentional update must reference a backend commit whose committed OpenAPI file exactly matches its worktree:
+`contracts/backend-openapi-v1.yaml` is the accepted Web snapshot. `npm run api:check` regenerates into a temporary directory and fails on drift. `npm run api:coverage` also fails if a snapshot operation has neither a production call site nor an explicit exception in `contracts/backend-api-coverage.json`, or when an exception becomes stale. The only current exceptions are the three media-write operations blocked by the approved missing authorized media-read contract. An intentional update must reference a backend commit whose committed OpenAPI file exactly matches its worktree:
 
 ```powershell
 npm run api:snapshot -- <backend-commit>

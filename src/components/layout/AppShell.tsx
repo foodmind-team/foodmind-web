@@ -12,6 +12,18 @@ const navigation: Array<{ to: string; label: string; icon: Icon }> = [
   { to: '/me', label: 'Me', icon: UserRound },
 ]
 
+function PrimaryNavigation({ className }: { className: string }) {
+  return (
+    <nav className={className} aria-label="Primary navigation">
+      {navigation.map(({ to, label, icon: NavigationIcon }) => (
+        <NavLink to={to} end={to === '/'} key={to}>
+          <NavigationIcon size={18} strokeWidth={2.1} /><span>{label}</span>
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
 export function AppShell() {
   const { user } = useAuth()
   const location = useLocation()
@@ -40,13 +52,16 @@ export function AppShell() {
           <span>FoodMind</span>
         </Link>
 
-        <div className="mode-switch" aria-label="Choose FoodMind mode">
-          <Link className={!isCooking ? 'active' : ''} aria-current={!isCooking ? 'page' : undefined} to="/">
-            <Utensils size={16} /><span>Eat out &amp; delivery</span>
-          </Link>
-          <Link className={isCooking ? 'active' : ''} aria-current={isCooking ? 'page' : undefined} to="/cooking">
-            <ChefHat size={16} /><span>Cooking</span>
-          </Link>
+        <div className="header-center">
+          <div className="mode-switch" aria-label="Choose FoodMind mode">
+            <Link className={!isCooking ? 'active' : ''} aria-current={!isCooking ? 'page' : undefined} to="/">
+              <Utensils size={16} /><span>Eat out &amp; delivery</span>
+            </Link>
+            <Link className={isCooking ? 'active' : ''} aria-current={isCooking ? 'page' : undefined} to="/cooking">
+              <ChefHat size={16} /><span>Cooking</span>
+            </Link>
+          </div>
+          <PrimaryNavigation className="desktop-navigation" />
         </div>
 
         <div className="header-actions">
@@ -61,13 +76,7 @@ export function AppShell() {
 
       <main id="main-content" tabIndex={-1}><Outlet /></main>
 
-      <nav className="bottom-navigation" aria-label="Primary navigation">
-        {navigation.map(({ to, label, icon: NavigationIcon }) => (
-          <NavLink to={to} end={to === '/'} key={to}>
-            <NavigationIcon size={20} strokeWidth={2.1} /><span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      <PrimaryNavigation className="bottom-navigation" />
       <ScrollRestoration />
     </div>
   )

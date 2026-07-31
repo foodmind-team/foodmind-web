@@ -22,6 +22,7 @@
 | Check | Result |
 |---|---|
 | `npm run api:check` | |
+| `npm run api:coverage` | |
 | `npm run lint` | |
 | `npm run typecheck` | |
 | `npm run test:coverage` | |

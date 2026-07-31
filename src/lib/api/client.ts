@@ -178,6 +178,7 @@ export async function responseError(response: Response) {
 
 export function errorMessage(error: unknown) {
   if (!navigator.onLine) return 'You appear to be offline. Reconnect and try again.'
+  if (error instanceof ApiError && error.fieldErrors.length) return error.fieldErrors.map((field) => field.message).join(' ')
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.'
 }
 

@@ -224,6 +224,7 @@ describe('typed API client', () => {
     expect(errorMessage(new Error('hidden'))).toContain('offline')
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
     expect(errorMessage(new Error('Try again.'))).toBe('Try again.')
+    expect(errorMessage(new ApiError(new Response(null, { status: 400 }), { fieldErrors: [{ field: 'currency', code: 'Length', message: 'Use a three-letter currency.' }] }))).toBe('Use a three-letter currency.')
     expect(errorMessage({ unknown: true })).toContain('Something went wrong')
   })
 })

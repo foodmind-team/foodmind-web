@@ -207,6 +207,7 @@ same-origin return path or `/`.
 | `/` | Recommendation Home | current user, preferences, groups, recommendation form/session |
 | `/recommendations/:sessionId` | Recommendation detail | recommendation session |
 | `/history` | Combined record history | `/history` |
+| `/records/:recordType` | Dedicated food or drink records | filtered collection API |
 | `/records/new` | Record composer | catalogue, groups |
 | `/records/:recordType/:id` | Record detail | food or drink detail |
 | `/records/:recordType/:id/edit` | Record editor | detail, ETag/version |

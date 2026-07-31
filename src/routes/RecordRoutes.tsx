@@ -46,7 +46,7 @@ export function HistoryPage() {
 
   return (
     <div className="page section-page">
-      <header className="section-page-heading"><div><p className="eyebrow">Your real food story</p><h1>History</h1><p>Food and drink records in one time-zone-aware timeline.</p></div><Link className="primary-action" to="/records/new"><Plus size={17} /> Add record</Link></header>
+      <header className="section-page-heading"><div><p className="eyebrow">Your real food story</p><h1>History</h1><p>Food and drink records in one time-zone-aware timeline.</p></div><div className="header-button-row"><Link className="secondary-action" to="/records/food"><Utensils size={17} /> Food records</Link><Link className="secondary-action" to="/records/drink"><Coffee size={17} /> Drink records</Link><Link className="primary-action" to="/records/new"><Plus size={17} /> Add record</Link></div></header>
       <section className="filter-bar" aria-label="History filters">
         <label>From<input type="date" value={filters.from} onChange={(event) => changeFilter('from', event.target.value)} /></label>
         <label>To<input type="date" value={filters.to} onChange={(event) => changeFilter('to', event.target.value)} /></label>
@@ -58,6 +58,71 @@ export function HistoryPage() {
       {history.isSuccess && entries.length === 0 && <EmptyState title="Your history starts with one meal" message="Record something you ate or drank and FoodMind will keep it organised here." action={<Link className="primary-action" to="/records/new">Add your first record</Link>} />}
       {entries.length > 0 && <section className="timeline-list">{entries.map((entry) => <Link className="timeline-card" to={`/records/${entry.sourceType.toLowerCase()}/${entry.sourceId}`} key={`${entry.sourceType}-${entry.sourceId}`}><span className={`timeline-icon ${entry.sourceType.toLowerCase()}`}>{entry.sourceType === 'FOOD' ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(entry.sourceType)} · {formatDateTime(entry.occurredAt)}</p><h2>{entry.title}</h2><p>{entry.context || 'Personal or trusted-group record'}</p></div><span className="timeline-rating">{entry.rating ? <><Star size={15} fill="currentColor" /> {entry.rating}</> : 'Not rated'}<ArrowRight size={17} /></span></Link>)}</section>}
       {history.hasNextPage && <button className="secondary-action load-more" type="button" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>{history.isFetchingNextPage ? 'Loading…' : 'Load more records'}</button>}
+    </div>
+  )
+}
+
+export function RecordCollectionPage() {
+  const { recordType = 'food' } = useParams()
+  const type: RecordType = recordType === 'drink' ? 'drink' : 'food'
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = {
+    from: searchParams.get('from') || '',
+    to: searchParams.get('to') || '',
+    visibility: (searchParams.get('visibility') || '') as '' | 'PRIVATE' | 'GROUP',
+    minRating: searchParams.get('minRating') || '',
+    page: Math.max(0, Number(searchParams.get('page') || 0)),
+    size: Math.min(50, Math.max(1, Number(searchParams.get('size') || 20))),
+    sort: searchParams.get('sort') || 'occurredAt,desc',
+  }
+  const records = useQuery({
+    queryKey: queryKeys.records.list(type, filters),
+    queryFn: async () => {
+      const query = {
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        visibility: filters.visibility || undefined,
+        minRating: filters.minRating ? Number(filters.minRating) : undefined,
+        page: filters.page,
+        size: filters.size,
+        sort: filters.sort,
+      }
+      return type === 'food'
+        ? dataOrThrow<Schema<'FoodRecordPageResponse'>>(await api.GET('/food-records', { params: { query } }))
+        : dataOrThrow<Schema<'DrinkRecordPageResponse'>>(await api.GET('/drink-records', { params: { query } }))
+    },
+  })
+  const items = (records.data?.items || []) as AnyRecord[]
+  const updateFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    if (key !== 'page') next.delete('page')
+    setSearchParams(next)
+  }
+
+  return (
+    <div className="page section-page">
+      <Link className="back-link" to="/history"><ArrowLeft size={16} /> Combined history</Link>
+      <header className="section-page-heading"><div><p className="eyebrow">Authorised record library</p><h1>{type === 'food' ? 'Food records' : 'Drink records'}</h1><p>Browse the permission-scoped {type} records returned by the dedicated backend collection.</p></div><div className="header-button-row"><Link className="secondary-action" to={`/records/${type === 'food' ? 'drink' : 'food'}`}>{type === 'food' ? <Coffee size={17} /> : <Utensils size={17} />} {type === 'food' ? 'Drink records' : 'Food records'}</Link><Link className="primary-action" to={`/records/new?type=${type}`}><Plus size={17} /> Add {type}</Link></div></header>
+      <section className="filter-bar record-library-filters" aria-label={`${type} record filters`}>
+        <label>From<input type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} /></label>
+        <label>To<input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} /></label>
+        <label>Visibility<select value={filters.visibility} onChange={(event) => updateFilter('visibility', event.target.value)}><option value="">All authorised</option><option value="PRIVATE">Private</option><option value="GROUP">Trusted group</option></select></label>
+        <label>Minimum rating<select value={filters.minRating} onChange={(event) => updateFilter('minRating', event.target.value)}><option value="">Any rating</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating}+</option>)}</select></label>
+        <label>Sort<select value={filters.sort} onChange={(event) => updateFilter('sort', event.target.value)}><option value="occurredAt,desc">Newest meal time</option><option value="occurredAt,asc">Oldest meal time</option><option value="rating,desc">Highest rating</option><option value="createdAt,desc">Recently added</option></select></label>
+        <label>Page size<select value={filters.size} onChange={(event) => updateFilter('size', event.target.value)}><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
+      </section>
+      {records.isLoading && <LoadingState label={`Loading ${type} records…`} />}
+      {records.isError && <ErrorState error={records.error} onRetry={() => void records.refetch()} />}
+      {records.isSuccess && items.length === 0 && <EmptyState title={`No ${type} records match`} message="Adjust the filters or add a new record. Permission-controlled records stay hidden when unavailable." action={<Link className="primary-action" to={`/records/new?type=${type}`}>Add {type}</Link>} />}
+      <section className="record-library-grid">{items.map((item) => {
+        const food = 'mealNameSnapshot' in item
+        const title = food ? item.mealNameSnapshot : item.drinkName
+        const place = food ? item.placeNameSnapshot : item.shopNameSnapshot
+        return <Link className="record-library-card" to={`/records/${type}/${item.id}`} key={item.id}><span className={`timeline-icon ${type}`}>{food ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(item.visibility)} · {formatDateTime(item.occurredAt)}</p><h2>{title}</h2><p>{place || 'No place recorded'}</p><div className="record-card-meta"><span>{formatMoney(item.price?.amount, item.price?.currency)}</span><span>{item.rating ? <><Star size={14} fill="currentColor" /> {item.rating}</> : 'Not rated'}</span></div></div><ArrowRight size={18} /></Link>
+      })}</section>
+      {records.data && records.data.totalPages > 1 && <nav className="pagination" aria-label={`${type} record pages`}><button type="button" disabled={filters.page === 0} onClick={() => updateFilter('page', String(filters.page - 1))}>Previous</button><span>Page {filters.page + 1} of {records.data.totalPages}</span><button type="button" disabled={!records.data.hasNext} onClick={() => updateFilter('page', String(filters.page + 1))}>Next</button></nav>}
     </div>
   )
 }
@@ -177,37 +242,47 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
       void queryClient.invalidateQueries({ queryKey: ['records'] })
       void queryClient.invalidateQueries({ queryKey: ['analytics'] })
       void queryClient.invalidateQueries({ queryKey: ['groups'] })
+      void queryClient.invalidateQueries({ queryKey: ['explore'] })
+      void queryClient.invalidateQueries({ queryKey: ['search'] })
       showToast(recordId ? 'Record updated.' : 'Record added to your history.')
       navigate(`/records/${currentType}/${saved.id}`)
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) setConflict(true)
+      let mappedField = false
       if (error instanceof ApiError) error.fieldErrors.forEach((field) => {
-        const map: Record<string, keyof RecordFormValues> = { mealNameSnapshot: 'name', drinkName: 'name', shopNameSnapshot: 'placeName', groupId: 'groupId', occurredAt: 'occurredAt', rating: 'rating' }
-        if (map[field.field]) setError(map[field.field], { message: field.message })
+        const map: Record<string, keyof RecordFormValues> = {
+          mealNameSnapshot: 'name', drinkName: 'name', placeNameSnapshot: 'placeName', shopNameSnapshot: 'placeName',
+          groupId: 'groupId', occurredAt: 'occurredAt', rating: 'rating', cuisineId: 'cuisineId', price: 'price', currency: 'currency',
+          comment: 'comment', sweetnessLevel: 'sweetnessLevel', iceLevel: 'iceLevel', wouldEatAgain: 'repeatIntent', wouldBuyAgain: 'repeatIntent',
+        }
+        if (map[field.field]) {
+          mappedField = true
+          setError(map[field.field], { message: field.message })
+        }
       })
-      throw error
+      if (!(error instanceof ApiError && error.status === 409) && !mappedField) setError('root', { message: errorMessage(error) })
     }
   })
 
   return (
-    <form className="record-form card-form" onSubmit={(event) => void submit(event).catch(() => undefined)} noValidate>
+    <form className="record-form card-form" onSubmit={(event) => void submit(event)} noValidate>
       {!recordId && <div className="segmented-control" aria-label="Record type"><label className={currentType === 'food' ? 'active' : ''}><input type="radio" value="food" {...register('type')} /> <Utensils size={17} /> Food</label><label className={currentType === 'drink' ? 'active' : ''}><input type="radio" value="drink" {...register('type')} /> <Coffee size={17} /> Drink</label></div>}
       {conflict && <div className="conflict-panel" role="alert"><strong>A newer version is available.</strong><p>Your draft is still here. Reload the latest record before deciding what to reapply.</p><button className="secondary-action" type="button" onClick={() => window.location.reload()}>Reload latest</button></div>}
       {errors.root && <div className="form-alert" role="alert">{errors.root.message}</div>}
       <div className="form-grid">
         <label>{currentType === 'food' ? 'Meal name' : 'Drink name'}<input {...register('name')} aria-invalid={Boolean(errors.name)} />{errors.name && <small>{errors.name.message}</small>}</label>
         <label>{currentType === 'food' ? 'Place (optional)' : 'Shop or place'}<input {...register('placeName')} aria-invalid={Boolean(errors.placeName)} />{errors.placeName && <small>{errors.placeName.message}</small>}</label>
-        <label>When you had it<input type="datetime-local" {...register('occurredAt')} /></label>
-        {currentType === 'food' && <label>Cuisine<select {...register('cuisineId')}><option value="">Not specified</option>{catalogue.data?.cuisines.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>}
-        <label>Price<input type="number" min="0" step="0.01" {...register('price')} /></label>
-        <label>Currency<input maxLength={3} {...register('currency')} /></label>
-        <label>Rating<select {...register('rating')}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option value={rating} key={rating}>{rating} / 5</option>)}</select></label>
-        <label>{currentType === 'food' ? 'Would eat again?' : 'Would buy again?'}<select {...register('repeatIntent')}><option value="">Not sure</option><option value="true">Yes</option><option value="false">No</option></select></label>
-        {currentType === 'drink' && <><label>Sweetness level<select {...register('sweetnessLevel')}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select></label><label>Ice level<select {...register('iceLevel')}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select></label></>}
+        <label>When you had it<input type="datetime-local" {...register('occurredAt')} aria-invalid={Boolean(errors.occurredAt)} />{errors.occurredAt && <small>{errors.occurredAt.message}</small>}</label>
+        {currentType === 'food' && <label>Cuisine<select {...register('cuisineId')} aria-invalid={Boolean(errors.cuisineId)}><option value="">Not specified</option>{catalogue.data?.cuisines.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>{errors.cuisineId && <small>{errors.cuisineId.message}</small>}</label>}
+        <label>Price<input type="number" min="0" step="0.01" {...register('price')} aria-invalid={Boolean(errors.price)} />{errors.price && <small>{errors.price.message}</small>}</label>
+        <label>Currency<input maxLength={3} {...register('currency')} aria-invalid={Boolean(errors.currency)} />{errors.currency && <small>{errors.currency.message}</small>}</label>
+        <label>Rating<select {...register('rating')} aria-invalid={Boolean(errors.rating)}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option value={rating} key={rating}>{rating} / 5</option>)}</select>{errors.rating && <small>{errors.rating.message}</small>}</label>
+        <label>{currentType === 'food' ? 'Would eat again?' : 'Would buy again?'}<select {...register('repeatIntent')} aria-invalid={Boolean(errors.repeatIntent)}><option value="">Not sure</option><option value="true">Yes</option><option value="false">No</option></select>{errors.repeatIntent && <small>{errors.repeatIntent.message}</small>}</label>
+        {currentType === 'drink' && <><label>Sweetness level<select {...register('sweetnessLevel')} aria-invalid={Boolean(errors.sweetnessLevel)}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select>{errors.sweetnessLevel && <small>{errors.sweetnessLevel.message}</small>}</label><label>Ice level<select {...register('iceLevel')} aria-invalid={Boolean(errors.iceLevel)}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select>{errors.iceLevel && <small>{errors.iceLevel.message}</small>}</label></>}
         <label>Visibility<select {...register('visibility')}><option value="PRIVATE">Private</option><option value="GROUP">A trusted group</option></select></label>
         {visibility === 'GROUP' && <label>Group<select {...register('groupId')} aria-invalid={Boolean(errors.groupId)}><option value="">Choose a group</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>{errors.groupId && <small>{errors.groupId.message}</small>}</label>}
       </div>
-      <label>Notes<textarea rows={4} maxLength={2_000} {...register('comment')} /></label>
+      <label>Notes<textarea rows={4} maxLength={4_000} {...register('comment')} />{errors.comment && <small>{errors.comment.message}</small>}</label>
       <p className="field-note">Optional fields cannot be explicitly cleared yet; the backend currently treats omitted and null values as unchanged on edits.</p>
       <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving…' : recordId ? 'Save changes' : 'Add to history'} <Check size={17} /></button></div>
     </form>
@@ -242,7 +317,7 @@ export function RecordDetailPage() {
     mutationFn: async () => type === 'food'
       ? dataOrThrow<void>(await api.DELETE('/food-records/{id}', { params: { path: { id } } }))
       : dataOrThrow<void>(await api.DELETE('/drink-records/{id}', { params: { path: { id } } })),
-    onSuccess: () => { queryClient.removeQueries({ queryKey: queryKeys.records.detail(type, id) }); void queryClient.invalidateQueries({ queryKey: ['records'] }); showToast('Record removed.'); navigate('/history') },
+    onSuccess: () => { queryClient.removeQueries({ queryKey: queryKeys.records.detail(type, id) }); void queryClient.invalidateQueries({ queryKey: ['records'] }); void queryClient.invalidateQueries({ queryKey: ['analytics'] }); void queryClient.invalidateQueries({ queryKey: ['groups'] }); void queryClient.invalidateQueries({ queryKey: ['explore'] }); void queryClient.invalidateQueries({ queryKey: ['search'] }); showToast('Record removed.'); navigate('/history') },
   })
   if (record.isLoading) return <div className="page"><LoadingState label="Opening this record…" /></div>
   if (record.isError) return <div className="page"><ErrorState error={record.error} onRetry={() => void record.refetch()} /></div>
@@ -250,7 +325,7 @@ export function RecordDetailPage() {
   const title = 'mealNameSnapshot' in data ? data.mealNameSnapshot : data.drinkName
   const place = 'mealNameSnapshot' in data ? data.placeNameSnapshot : data.shopNameSnapshot
   const repeat = 'mealNameSnapshot' in data ? data.wouldEatAgain : data.wouldBuyAgain
-  return <div className="page section-page narrow-page"><Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link><header className="record-hero"><span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div></header><section className="detail-card"><dl className="detail-grid"><div><dt>Rating</dt><dd>{data.rating ? `${data.rating} / 5` : 'Not rated'}</dd></div><div><dt>Price</dt><dd>{formatMoney(data.price?.amount, data.price?.currency)}</dd></div><div><dt>{type === 'food' ? 'Would eat again' : 'Would buy again'}</dt><dd>{repeat === null || repeat === undefined ? 'Not answered' : repeat ? 'Yes' : 'No'}</dd></div><div><dt>Last updated</dt><dd>{formatDateTime(data.updatedAt)}</dd></div></dl>{data.comment && <div className="note-block"><p className="eyebrow">Your note</p><p>{data.comment}</p></div>}<div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>{confirming && <div className="confirm-panel" role="alertdialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}</section></div>
+  return <div className="page section-page narrow-page"><Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link><header className="record-hero"><span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div></header><section className="detail-card"><dl className="detail-grid"><div><dt>Rating</dt><dd>{data.rating ? `${data.rating} / 5` : 'Not rated'}</dd></div><div><dt>Price</dt><dd>{formatMoney(data.price?.amount, data.price?.currency)}</dd></div><div><dt>{type === 'food' ? 'Would eat again' : 'Would buy again'}</dt><dd>{repeat === null || repeat === undefined ? 'Not answered' : repeat ? 'Yes' : 'No'}</dd></div><div><dt>Last updated</dt><dd>{formatDateTime(data.updatedAt)}</dd></div></dl>{data.comment && <div className="note-block"><p className="eyebrow">Your note</p><p>{data.comment}</p></div>}<div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>{confirming && <div className="confirm-panel" role="alert" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}</section></div>
 }
 
 export function RecordEditorPage() {

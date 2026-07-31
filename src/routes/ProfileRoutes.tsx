@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../app/providers/AuthProvider'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
-import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
+import { api, ApiError, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
 import { formatDateTime, sentenceCase } from '../lib/format'
 
@@ -66,7 +66,7 @@ export function PreferencesPage() {
   const reference = useQuery({ queryKey: queryKeys.catalogue.reference(), staleTime: Infinity, queryFn: async () => dataOrThrow<Schema<'CatalogueReferenceDataResponse'>>(await api.GET('/catalogue/reference-data')) })
   const [allergenCodes, setAllergenCodes] = useState<string[]>([])
   const [allergenSeverity, setAllergenSeverity] = useState<Record<string, string>>({})
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<PreferenceForm>()
+  const { register, handleSubmit, reset, setError, formState: { isSubmitting } } = useForm<PreferenceForm>()
 
   useEffect(() => {
     if (!preferences.data) return
@@ -81,7 +81,20 @@ export function PreferencesPage() {
     onSuccess: (updated) => { queryClient.setQueryData(queryKeys.users.preferences(), updated); showToast('Preferences updated.'); void queryClient.invalidateQueries({ queryKey: ['recommendations'] }); void queryClient.invalidateQueries({ queryKey: ['cooking'] }) },
   })
   const submit = handleSubmit(async (values) => {
-    await update.mutateAsync({ budgetMin: stringNumber(values.budgetMin), budgetMax: stringNumber(values.budgetMax), currency: values.currency.toUpperCase(), spiceTolerance: stringNumber(values.spiceTolerance), preferredArea: values.preferredArea || undefined, preferredLatitude: stringNumber(values.preferredLatitude), preferredLongitude: stringNumber(values.preferredLongitude), maxDistanceKm: stringNumber(values.maxDistanceKm), cleanlinessPriority: stringNumber(values.cleanlinessPriority), minimumCleanlinessEvidenceScore: stringNumber(values.minimumCleanlinessEvidenceScore), foodGoal: values.foodGoal || undefined, drinkSweetnessPreference: values.drinkSweetnessPreference || undefined, drinkIcePreference: values.drinkIcePreference || undefined, likedCuisineCodes: values.likedCuisineCodes, dislikedCuisineCodes: values.dislikedCuisineCodes, dietaryTagCodes: values.dietaryTagCodes, preferredMealTypes: values.preferredMealTypes, allergens: allergenCodes.map((code) => ({ code, severity: allergenSeverity[code] || 'MODERATE' })) })
+    try {
+      await update.mutateAsync({ budgetMin: stringNumber(values.budgetMin), budgetMax: stringNumber(values.budgetMax), currency: values.currency.toUpperCase(), spiceTolerance: stringNumber(values.spiceTolerance), preferredArea: values.preferredArea || undefined, preferredLatitude: stringNumber(values.preferredLatitude), preferredLongitude: stringNumber(values.preferredLongitude), maxDistanceKm: stringNumber(values.maxDistanceKm), cleanlinessPriority: stringNumber(values.cleanlinessPriority), minimumCleanlinessEvidenceScore: stringNumber(values.minimumCleanlinessEvidenceScore), foodGoal: values.foodGoal || undefined, drinkSweetnessPreference: values.drinkSweetnessPreference || undefined, drinkIcePreference: values.drinkIcePreference || undefined, likedCuisineCodes: values.likedCuisineCodes, dislikedCuisineCodes: values.dislikedCuisineCodes, dietaryTagCodes: values.dietaryTagCodes, preferredMealTypes: values.preferredMealTypes, allergens: allergenCodes.map((code) => ({ code, severity: allergenSeverity[code] || 'MODERATE' })) })
+    } catch (error) {
+      let focused = false
+      if (error instanceof ApiError) error.fieldErrors.forEach((field) => {
+        if (field.field === 'allergens') {
+          setError('root', { message: field.message })
+        } else if (field.field in values) {
+          setError(field.field as keyof PreferenceForm, { message: field.message }, { shouldFocus: !focused })
+          focused = true
+        }
+      })
+      if (!focused && !(error instanceof ApiError && error.fieldErrors.length)) setError('root', { message: errorMessage(error) })
+    }
   })
   const toggleAllergen = (code: string, checked: boolean) => setAllergenCodes((current) => checked ? [...new Set([...current, code])] : current.filter((item) => item !== code))
 

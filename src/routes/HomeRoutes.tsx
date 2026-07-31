@@ -23,6 +23,8 @@ const contextSchema = z.object({
   maxBudget: z.string(),
   currency: z.string().length(3, 'Use a three-letter currency code.'),
   area: z.string().max(120),
+  latitude: z.string(),
+  longitude: z.string(),
   maxDistanceKm: z.string(),
   mood: z.string().max(120),
   requestedFor: z.string(),
@@ -30,6 +32,16 @@ const contextSchema = z.object({
   minimumCleanlinessEvidenceScore: z.string(),
   requiredDietaryTagCodes: z.array(z.string()),
   avoidAllergenCodes: z.array(z.string()),
+}).superRefine((value, context) => {
+  const hasLatitude = Boolean(value.latitude.trim())
+  const hasLongitude = Boolean(value.longitude.trim())
+  if (hasLatitude !== hasLongitude) {
+    context.addIssue({ code: 'custom', path: [hasLatitude ? 'longitude' : 'latitude'], message: 'Supply both coordinates or leave both blank.' })
+  }
+  const latitude = optionalNumber(value.latitude)
+  const longitude = optionalNumber(value.longitude)
+  if (latitude !== undefined && (latitude < -90 || latitude > 90)) context.addIssue({ code: 'custom', path: ['latitude'], message: 'Latitude must be between -90 and 90.' })
+  if (longitude !== undefined && (longitude < -180 || longitude > 180)) context.addIssue({ code: 'custom', path: ['longitude'], message: 'Longitude must be between -180 and 180.' })
 })
 
 type ContextForm = z.infer<typeof contextSchema>
@@ -77,6 +89,8 @@ export function HomePage() {
     maxBudget: preferences.data?.budgetMax?.toString() || '',
     currency: preferences.data?.currency || 'SGD',
     area: preferences.data?.preferredArea || '',
+    latitude: '',
+    longitude: '',
     maxDistanceKm: preferences.data?.maxDistanceKm?.toString() || '',
     mood: '',
     requestedFor: toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000).toISOString()),
@@ -115,6 +129,8 @@ export function HomePage() {
       maxBudget: optionalNumber(form.maxBudget),
       currency: form.currency.toUpperCase(),
       area: form.area || undefined,
+      latitude: optionalNumber(form.latitude),
+      longitude: optionalNumber(form.longitude),
       maxDistanceKm: optionalNumber(form.maxDistanceKm),
       mood: form.mood || undefined,
       requestedFor: form.requestedFor ? new Date(form.requestedFor).toISOString() : undefined,
@@ -149,7 +165,7 @@ export function HomePage() {
           </div>
           <div className="context-grid" aria-label="Current recommendation context">
             <ContextItem icon={Clock3} label="When" value={values.requestedFor ? new Date(values.requestedFor).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Any time'} />
-            <ContextItem icon={MapPin} label="Range" value={values.maxDistanceKm ? `Within ${values.maxDistanceKm} km` : values.area || 'Any area'} />
+            <ContextItem icon={MapPin} label="Range" value={values.maxDistanceKm ? `Within ${values.maxDistanceKm} km` : values.area || (values.latitude && values.longitude ? 'Manual coordinates' : 'Any area')} />
             <ContextItem icon={WalletCards} label="Budget" value={values.maxBudget ? `${values.currency} ${values.maxBudget}` : 'Flexible'} />
             <ContextItem icon={Sparkles} label="Hard needs" value={hardConstraints.length ? `${hardConstraints.length} applied` : 'None added'} />
           </div>
@@ -177,6 +193,8 @@ export function HomePage() {
               <label>Maximum budget<input type="number" min="0" step="0.01" {...register('maxBudget')} /></label>
               <label>Currency<input maxLength={3} {...register('currency')} />{errors.currency && <small>{errors.currency.message}</small>}</label>
               <label>Area<input placeholder="e.g. Tiong Bahru" {...register('area')} /></label>
+              <label>Latitude (optional)<input type="number" min="-90" max="90" step="any" placeholder="1.3521" {...register('latitude')} />{errors.latitude && <small>{errors.latitude.message}</small>}</label>
+              <label>Longitude (optional)<input type="number" min="-180" max="180" step="any" placeholder="103.8198" {...register('longitude')} />{errors.longitude && <small>{errors.longitude.message}</small>}</label>
               <label>Maximum distance (km)<input type="number" min="0.1" step="0.1" {...register('maxDistanceKm')} /></label>
               <label>Mood<input placeholder="Comforting, quick, adventurous…" {...register('mood')} /></label>
               <label>Requested time<input type="datetime-local" {...register('requestedFor')} /></label>

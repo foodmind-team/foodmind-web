@@ -37,6 +37,7 @@ The browser always calls same-origin `/api/v1`. Vite reads the server-only `FOOD
 
 ```powershell
 npm run api:check
+npm run api:coverage
 npm run lint
 npm run typecheck
 npm test -- --run
@@ -46,7 +47,7 @@ npm run test:e2e
 npm run validate
 ```
 
-`api:check` confirms that the generated types match the committed OpenAPI snapshot and lock metadata. `validate` runs the contract, lint, type, coverage, and production-build gates. Playwright is a separate deterministic browser gate.
+`api:check` confirms that the generated types match the committed OpenAPI snapshot and lock metadata. `api:coverage` proves that every backend operation has either a production consumer or an approved, documented contract blocker. `validate` runs both API gates, lint, type, test coverage, and the production build. Playwright is a separate deterministic browser gate.
 
 ## API contract
 

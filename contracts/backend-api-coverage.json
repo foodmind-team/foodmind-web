@@ -1,0 +1,30 @@
+{
+  "directUsages": [
+    {
+      "method": "POST",
+      "path": "/auth/refresh",
+      "source": "src/lib/api/client.ts",
+      "reason": "Refresh bypasses the authenticated OpenAPI client to prevent recursive 401 handling."
+    }
+  ],
+  "exceptions": [
+    {
+      "method": "POST",
+      "path": "/media/uploads",
+      "status": "BLOCKED_BY_READ_CONTRACT",
+      "reason": "The backend has no authorised media read/download response; the approved first release must not expose an upload that cannot be rendered after reload."
+    },
+    {
+      "method": "POST",
+      "path": "/media/{mediaAssetId}/finalise",
+      "status": "BLOCKED_BY_READ_CONTRACT",
+      "reason": "Part of the deferred media write-only workflow."
+    },
+    {
+      "method": "DELETE",
+      "path": "/media/{mediaAssetId}",
+      "status": "BLOCKED_BY_READ_CONTRACT",
+      "reason": "Part of the deferred media write-only workflow."
+    }
+  ]
+}

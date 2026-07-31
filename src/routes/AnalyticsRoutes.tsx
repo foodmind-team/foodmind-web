@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { Activity, ArrowLeft, BarChart3, CalendarDays, Star, TrendingUp } from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { api, dataOrThrow, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
 
 type Metric = Schema<'DashboardMetricResponse'>
+type ChartRow = Record<string, string | number>
+const chartColors = ['#174d38', '#f27b5b', '#83a84d', '#d4a72c', '#5e7c70', '#9c6b4f']
 
 function date(offsetDays = 0) {
   const value = new Date()
@@ -29,22 +31,42 @@ function displayValue(metric: Metric) {
   return metric.value.toLocaleString()
 }
 
+function pivotByPeriod(metrics: Metric[], seriesName: (metric: Metric) => string) {
+  const rows = new Map<string, ChartRow>()
+  for (const metric of metrics) {
+    if (metric.value === null || metric.value === undefined || metric.empty) continue
+    const row = rows.get(metric.period) || { period: metric.period }
+    row[seriesName(metric)] = metric.value
+    rows.set(metric.period, row)
+  }
+  return [...rows.values()]
+}
+
 function MetricsView({ metrics, spending }: { metrics: Metric[]; spending: Metric[] }) {
   const valid = metrics.filter((metric) => !metric.empty && metric.value !== null && metric.value !== undefined)
   const kpiCodes = new Set(['MEAN_RATING', 'REPEAT_FREQUENCY', 'ACCEPTANCE_RATE', 'REJECTION_RATE', 'WOULD_AGAIN_RATE', 'RECOMMENDATION_WOULD_EAT_AGAIN_RATE'])
+  const activityCodes = ['FOOD_COUNT', 'DRINK_COUNT', 'FOOD_DRINK_COUNT']
+  const outcomeCodes = ['ACCEPTANCE_RATE', 'REJECTION_RATE', 'WOULD_AGAIN_RATE', 'RECOMMENDATION_WOULD_EAT_AGAIN_RATE', 'REJECTION_REASON', 'SELECTED_CANDIDATE_TYPE']
   const kpis = metrics.filter((metric) => kpiCodes.has(metric.code))
-  const activity = valid.filter((metric) => ['FOOD_COUNT', 'DRINK_COUNT', 'FOOD_DRINK_COUNT'].includes(metric.code))
-  const distributions = valid.filter((metric) => ['CUISINE_DISTRIBUTION', 'REJECTION_REASON', 'SELECTED_CANDIDATE_TYPE'].includes(metric.code))
-  const chartRows = activity.map((metric) => ({ period: metric.period, label: metric.label, value: metric.value }))
-  const spendingRows = spending.filter((metric) => !metric.empty && metric.value !== null && metric.value !== undefined).map((metric) => ({ period: metric.period, value: metric.value, currency: metric.currency || metric.dimension || 'Currency' }))
-  const distributionRows = distributions.map((metric) => ({ label: metric.dimensionLabel || metric.dimension || metric.label, value: metric.value, family: metric.label }))
+  const activity = valid.filter((metric) => activityCodes.includes(metric.code))
+  const cuisine = valid.filter((metric) => metric.code === 'CUISINE_DISTRIBUTION')
+  const outcomes = valid.filter((metric) => outcomeCodes.includes(metric.code))
+  const activityRows = pivotByPeriod(activity, (metric) => metric.label)
+  const activitySeries = [...new Set(activity.map((metric) => metric.label))]
+  const validSpending = spending.filter((metric) => !metric.empty && metric.value !== null && metric.value !== undefined)
+  const spendingRows = pivotByPeriod(validSpending, (metric) => metric.currency || metric.dimension || 'Currency')
+  const currencies = [...new Set(validSpending.map((metric) => metric.currency || metric.dimension || 'Currency'))]
+  const cuisineRows = cuisine.map((metric) => ({ name: metric.dimensionLabel || metric.dimension || metric.label, value: metric.value as number, period: metric.period }))
+  const outcomeRows = outcomes.map((metric) => ({ label: metric.dimensionLabel || metric.dimension || metric.label, value: metric.value as number, family: metric.label, period: metric.period }))
+
   return (
     <>
       <section className="metric-kpis">{kpis.length ? kpis.map((metric) => <article className="metric-card" key={`${metric.code}-${metric.period}-${metric.dimension}`}><span>{metric.code === 'MEAN_RATING' ? <Star /> : <TrendingUp />}</span><p className="eyebrow">{metric.label}</p><strong>{displayValue(metric)}</strong><small>{metric.empty ? 'No data for this period' : metric.samples ? `${metric.samples} samples` : metric.period}</small></article>) : <article className="metric-card empty-metric"><Activity /><p>No summary metrics returned.</p></article>}</section>
       <div className="analytics-grid">
-        <ChartCard title="Food and drink activity" summary={`${activity.length} backend metric rows across the selected range.`}>{chartRows.length ? <ResponsiveContainer width="100%" height={280}><BarChart data={chartRows}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" /><YAxis /><Tooltip /><Bar dataKey="value" fill="#174d38" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <p className="chart-empty">No activity data</p>}</ChartCard>
-        <ChartCard title="Spending by currency" summary="Each returned currency remains a separate backend-owned row; currencies are never combined.">{spendingRows.length ? <ResponsiveContainer width="100%" height={280}><LineChart data={spendingRows}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="value" stroke="#f27b5b" strokeWidth={3} /></LineChart></ResponsiveContainer> : <p className="chart-empty">No spending data</p>}</ChartCard>
-        <ChartCard title="Patterns and outcomes" summary={`${distributionRows.length} returned distribution rows. Values are displayed exactly as supplied by the backend.`}>{distributionRows.length ? <ResponsiveContainer width="100%" height={300}><BarChart data={distributionRows} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis type="category" dataKey="label" width={110} /><Tooltip /><Bar dataKey="value" fill="#d7ef72" stroke="#174d38" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer> : <p className="chart-empty">No distribution data</p>}</ChartCard>
+        <ChartCard title="Food and drink activity" summary={`${activity.length} backend metric rows, grouped visually by the returned period.`}>{activityRows.length ? <ResponsiveContainer width="100%" height={280}><BarChart data={activityRows}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" /><YAxis /><Tooltip /><Legend />{activitySeries.map((series, index) => <Bar dataKey={series} fill={chartColors[index % chartColors.length]} isAnimationActive={false} radius={[6, 6, 0, 0]} key={series} />)}</BarChart></ResponsiveContainer> : <p className="chart-empty">No activity data</p>}</ChartCard>
+        <ChartCard title="Spending by currency" summary="Each currency is a separate series; FoodMind never combines monetary values across currencies.">{spendingRows.length ? <ResponsiveContainer width="100%" height={280}><LineChart data={spendingRows}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" /><YAxis /><Tooltip /><Legend />{currencies.map((currency, index) => <Line type="monotone" dataKey={currency} name={currency} connectNulls={false} isAnimationActive={false} stroke={chartColors[(index + 1) % chartColors.length]} strokeWidth={3} key={currency} />)}</LineChart></ResponsiveContainer> : <p className="chart-empty">No spending data</p>}</ChartCard>
+        <ChartCard title="Cuisine distribution" summary={`${cuisineRows.length} cuisine rows displayed exactly as returned; labels include their backend dimensions.`}>{cuisineRows.length ? <ResponsiveContainer width="100%" height={300}><PieChart><Pie data={cuisineRows} dataKey="value" nameKey="name" innerRadius={62} isAnimationActive={false} outerRadius={105} paddingAngle={2}>{cuisineRows.map((row, index) => <Cell fill={chartColors[index % chartColors.length]} key={`${row.name}-${row.period}-${index}`} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer> : <p className="chart-empty">No cuisine data</p>}</ChartCard>
+        <ChartCard title="Recommendation outcomes" summary={`${outcomeRows.length} acceptance, rejection, reason, and candidate-type rows without client-side recalculation.`}>{outcomeRows.length ? <ResponsiveContainer width="100%" height={Math.max(300, outcomeRows.length * 34)}><BarChart data={outcomeRows} layout="vertical"><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis type="category" dataKey="label" width={125} /><Tooltip /><Bar dataKey="value" fill="#d7ef72" isAnimationActive={false} stroke="#174d38" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer> : <p className="chart-empty">No recommendation outcome data</p>}</ChartCard>
       </div>
       <section className="metric-table-card"><div><p className="eyebrow">Accessible data table</p><h2>All returned metrics</h2><p>Null and empty values remain “No data”; they are never converted to zero.</p></div><div className="table-scroll"><table><thead><tr><th>Metric</th><th>Period</th><th>Dimension</th><th>Value</th><th>Samples</th></tr></thead><tbody>{metrics.map((metric, index) => <tr key={`${metric.code}-${metric.period}-${metric.dimension}-${index}`}><th scope="row">{metric.label}</th><td>{metric.period}</td><td>{metric.dimensionLabel || metric.dimension || '—'}</td><td>{displayValue(metric)}</td><td>{metric.samples ?? '—'}</td></tr>)}</tbody></table></div></section>
     </>
@@ -52,7 +74,8 @@ function MetricsView({ metrics, spending }: { metrics: Metric[]; spending: Metri
 }
 
 function ChartCard({ title, summary, children }: { title: string; summary: string; children: React.ReactNode }) {
-  return <section className="chart-card"><div><p className="eyebrow">Backend-owned metric</p><h2>{title}</h2><p id={`${title.replaceAll(' ', '-')}-summary`}>{summary}</p></div><div className="chart-wrap" role="img" aria-label={`${title}. ${summary}`}>{children}</div></section>
+  const summaryId = `${title.replaceAll(' ', '-').toLowerCase()}-summary`
+  return <section className="chart-card" aria-labelledby={`${summaryId}-title`} aria-describedby={summaryId}><div><p className="eyebrow">Backend-owned metric</p><h2 id={`${summaryId}-title`}>{title}</h2><p id={summaryId}>{summary}</p></div><div className="chart-wrap" aria-hidden="true">{children}</div></section>
 }
 
 export function DashboardPage() {

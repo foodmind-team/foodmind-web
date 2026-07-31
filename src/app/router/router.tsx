@@ -28,6 +28,7 @@ export const router = createBrowserRouter([
         { path: 'recommendations/:sessionId', lazy: async () => ({ Component: (await import('../../routes/HomeRoutes')).RecommendationDetailPage }) },
         { path: 'history', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).HistoryPage }) },
         { path: 'records/new', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).RecordComposerPage }) },
+        { path: 'records/:recordType', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).RecordCollectionPage }) },
         { path: 'records/:recordType/:id', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).RecordDetailPage }) },
         { path: 'records/:recordType/:id/edit', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).RecordEditorPage }) },
         { path: 'groups', lazy: async () => ({ Component: (await import('../../routes/GroupRoutes')).GroupsPage }) },

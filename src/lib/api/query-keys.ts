@@ -17,10 +17,11 @@ export const queryKeys = {
   },
   records: {
     history: (filters: Record<string, unknown>) => ['records', 'history', normalized(filters)] as const,
+    list: (type: string, filters: Record<string, unknown>) => ['records', type, 'list', normalized(filters)] as const,
     detail: (type: string, id: string) => ['records', type, id] as const,
   },
   groups: {
-    list: () => ['groups'] as const,
+    list: () => ['groups', 'list'] as const,
     detail: (id: string) => ['groups', id] as const,
     members: (id: string) => ['groups', id, 'members'] as const,
     feed: (id: string) => ['groups', id, 'feed'] as const,

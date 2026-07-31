@@ -523,8 +523,9 @@ catalogue values in forms.
 | GET | `/groups/{groupId}/feed` | authorized cursor feed |
 | POST | `/groups/{groupId}/recommendation-shares` | share selected candidate |
 
-Before implementing Join, inspect both join operations and select the canonical
-one based on current controller tests. Do not call both.
+The canonical join is `/group-invitations/join`. The retained `/groups/join`
+compatibility alias is attempted only when the canonical route returns `404` or
+`405`; a successful or domain-error response is never submitted twice.
 
 ### 9.6 Recommendations
 
