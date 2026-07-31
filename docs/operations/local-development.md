@@ -1,34 +1,19 @@
-# Web Local Development
+# Web local development
 
 ## Prerequisites
 
-- Git
-- A Node.js version supported by the committed Vite version
-- npm
-- A running or mocked FoodMind backend
+- Node.js 24, as pinned by `.node-version` and `package.json#engines`
+- npm and Git
+- FoodMind Backend, normally at `http://localhost:8080`
 
-The team should pin the Node.js version before CI is finalised.
-
-## Install
-
-Use the lockfile:
+## Install and configure
 
 ```powershell
 npm ci
+Copy-Item .env.example .env.local
 ```
 
-Do not use `npm install` in CI because it may rewrite dependency resolution.
-
-## Configure
-
-Create `.env.local`:
-
-```text
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-VITE_APP_ENV=local
-```
-
-`.env.local` is local-only. Never place credentials or internal service addresses in it.
+`.env.local` is ignored. `FOODMIND_BACKEND_ORIGIN` is read only by Vite's development server; it is intentionally not prefixed with `VITE_` and cannot enter browser code. `VITE_APP_ENV` is a non-secret display label.
 
 ## Run
 
@@ -36,87 +21,41 @@ VITE_APP_ENV=local
 npm run dev
 ```
 
-Vite prints the actual local URL. Do not assume a fixed port if it is already occupied.
+The UI calls `/api/v1` on the Vite origin. Vite forwards those requests to the configured backend, including cookies, bearer headers, idempotency keys, and `If-Match`.
 
 ## Validate
 
 ```powershell
-npm run lint
-npm run build
-```
-
-When test tooling is introduced, the repository should also provide:
-
-```text
-npm run test
-npm run test:coverage
+npm run validate
 npm run test:e2e
 ```
 
-Do not add these scripts until they execute real checks.
+The deterministic unit/component/API suite uses synthetic MSW data. The browser suite intercepts only the documented `/api/v1` surface and checks authenticated routing, recommendation behavior, responsive layout, and core accessibility. Install Chromium once with `npx playwright install chromium` if the local Playwright cache is empty.
 
-## Backend Modes
+## Backend contract workflow
 
-### Real backend
+`contracts/backend-openapi-v1.yaml` is the accepted Web snapshot. `npm run api:check` regenerates into a temporary directory and fails on drift. An intentional update must reference a backend commit whose committed OpenAPI file exactly matches its worktree:
 
-Use the local Spring Boot URL for integrated development.
+```powershell
+npm run api:snapshot -- <backend-commit>
+npm run api:generate
+npm run api:check
+```
 
-### Mocked contract
+The generator applies one documented compatibility correction to the backend's broken chat `422` schema reference. Recommendation success values are widened only at the route boundary until the backend contract is corrected.
 
-Use fixtures verified against the committed OpenAPI contract when the backend is unavailable. Mock handlers must reproduce:
-
-- Success responses
-- Validation errors
-- Authentication failure
-- Forbidden access
-- Empty results
-- Recommendation fallback
-- Internal-service unavailable states
-
-Mocks must not become a separate undocumented API design.
-
-## Browser Checks
-
-Before a Pull Request:
-
-- Confirm **Eat out & delivery** is the default home mode and the primary generate action is visible without scrolling at supported mobile widths.
-- Switch to Cooking and confirm recommendation-specific group context is replaced by pantry/time/budget context.
-- Generate a recommendation, verify one lead result, then verify “try another” stays within the returned candidate set.
-- Navigate directly to Groups and Explore; verify private or inaccessible content never appears in Explore fixtures.
-- Test a supported Chromium browser.
-- Test keyboard-only interaction.
-- Check responsive widths.
-- Confirm no secret or internal URL appears in the production bundle.
-- Confirm network errors have a recoverable state.
-- Confirm console output contains no token or personal data.
-
-## Production Build
+## Production build
 
 ```powershell
 npm run build
+npm run preview
 ```
 
-The generated `dist/` directory is build output and is not committed. Deployment should build from a reviewed commit.
+`dist/` contains the static application and the Cloudflare Worker-compatible server entry. The server entry adds SPA fallback, security headers, and a closed same-origin API proxy. The Vercel function implements the same proxy boundary for the documented demo target.
 
 ## Troubleshooting
 
-### API requests fail
-
-- Check `VITE_API_BASE_URL`.
-- Confirm it includes `/api/v1` according to the selected convention.
-- Confirm backend CORS permits the local Web origin.
-- Check browser network logs for the backend error code.
-
-### Authentication repeatedly expires
-
-- Confirm the backend token lifetime.
-- Check system time.
-- Ensure concurrent requests share the same session strategy.
-- Clear stale local development data.
-
-### Build succeeds locally but fails in CI
-
-- Use `npm ci`.
-- Pin the Node version.
-- Check case-sensitive import paths.
-- Confirm no source depends on an untracked local file.
+- `502 UPSTREAM_UNAVAILABLE`: set `FOODMIND_BACKEND_ORIGIN` and confirm the backend is running.
+- Repeated sign-in: confirm refresh-cookie domain, `Secure`/`SameSite` settings, backend Web origin, and local system time.
+- Contract drift: update from an explicit backend commit; never edit generated `schema.ts`.
+- Stale private data after auth changes: use the in-app logout flow; it clears memory session and the private Query cache.

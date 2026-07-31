@@ -36,9 +36,9 @@ Owns application-level composition:
 
 It must not become a storage location for feature logic.
 
-### `features`
+### `routes`
 
-Each feature owns:
+Each lazy route module owns:
 
 - Pages
 - Feature-specific components
@@ -47,7 +47,7 @@ Each feature owns:
 - Form schema adapters
 - Feature tests
 
-Feature folders should expose a deliberate public surface. Avoid deep imports into another feature.
+Route modules share only presentation-neutral components and stable `lib` adapters. They do not import another route module's internals.
 
 ### `components`
 
@@ -123,7 +123,7 @@ another returned candidate without silently starting a new recommendation sessio
 - The top-level mode switch contains **Eat out & delivery** and **Cooking**.
 - Recommendation mode is selected by default and owns the strongest call to action.
 - Persistent labeled navigation contains Home, Groups, Explore, Saved, and Me.
-- Groups is the shared decision workspace for membership, votes, group history, and sharing a result.
+- Groups is the shared decision workspace for membership, authorised history, and sharing a result. Polls and voting are not part of the current contract.
 - Explore uses an image-led post grid, but its data remains limited to authorised group-visible records and curated platform content.
 - Public/follower feeds, public internet restaurant search, ordering, and payment remain outside the MVP.
 - The Cooking mode reads manually supplied or backend-provided pantry context; it must not imply automatic inventory capture.
