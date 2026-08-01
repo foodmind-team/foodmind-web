@@ -77,10 +77,13 @@ export function ExplorePage() {
 
   return (
     <div className="page section-page">
-      <header className="section-page-heading explore-heading"><div><p className="eyebrow">Authorised discovery</p><h1>Explore what your circles and FoodMind know.</h1><p>Trusted group records and curated catalogue ideas—never a public follower feed.</p></div><label className="explore-search"><Search size={18} /><span className="sr-only">Search authorised FoodMind content</span><input autoFocus={searchParams.get('search') === 'true'} value={query} onChange={(event) => changeQuery(event.target.value)} placeholder="Search places, meals, or products" /></label></header>
-      <div className="permission-note"><ShieldCheck size={17} /><span>Every result is re-authorised when it loads. Removed access becomes unavailable, not cached content.</span></div>
-      <div className="topic-row" aria-label="Explore source filters">{[['', 'For you'], ['records', 'Group records'], ['products', 'Curated products'], ['places', 'Curated places']].map(([value, label]) => <button className={type === value ? 'active' : ''} type="button" onClick={() => setFilter('type', value)} key={label}>{label}</button>)}</div>
-      <div className="topic-row secondary-topics" aria-label="Explore topic filters">{['', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés'].map((value) => <button className={topic === value ? 'active' : ''} type="button" onClick={() => setFilter('topic', value)} key={value || 'all'}>{value || 'All topics'}</button>)}</div>
+      <header className="section-page-heading explore-heading"><div><p className="eyebrow">Your trusted feed</p><h1>Explore what your circles and FoodMind know.</h1><p>Meals, places, and products from sources you can trust.</p></div></header>
+      <section className="explore-controls" aria-label="Explore controls">
+        <label className="explore-search"><Search size={18} /><span className="sr-only">Search authorised FoodMind content</span><input autoFocus={searchParams.get('search') === 'true'} value={query} onChange={(event) => changeQuery(event.target.value)} placeholder="Search places, meals, or products" />{query && <button type="button" onClick={() => changeQuery('')} aria-label="Clear search">Clear</button>}</label>
+        <div className="topic-row" aria-label="Explore source filters">{[['', 'For you'], ['records', 'Group records'], ['products', 'Products'], ['places', 'Places']].map(([value, label]) => <button className={type === value ? 'active' : ''} type="button" onClick={() => setFilter('type', value)} key={label}>{label}</button>)}</div>
+        <div className="topic-row secondary-topics" aria-label="Explore topic filters">{['', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés'].map((value) => <button className={topic === value ? 'active' : ''} type="button" onClick={() => setFilter('topic', value)} key={value || 'all'}>{value || 'All topics'}</button>)}</div>
+        <div className="permission-note"><ShieldCheck size={16} /><span>Only content you are authorised to see appears here.</span></div>
+      </section>
       {isLoading && <LoadingState label={debouncedQuery ? 'Searching FoodMind…' : 'Gathering authorised ideas…'} />}
       {isError && <ErrorState error={error} onRetry={() => void retry()} />}
       {isSuccess && items.length === 0 && <EmptyState title={debouncedQuery ? 'No authorised matches' : 'Nothing to explore yet'} message={debouncedQuery ? 'Try a broader search or another source filter.' : 'Group-visible records and active curated content will appear here.'} />}
@@ -98,7 +101,23 @@ function DiscoveryCard({ item }: { item: ExploreItem | SearchItem }) {
     mutationFn: async () => dataOrThrow(await api.POST('/want-to-try', { body: { sourceType: isExplore ? saveType(item.sourceType as ExploreItem['sourceType']) : item.sourceType as Schema<'WantToTrySourceType'>, sourceId: item.sourceId } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['saved'] }); showToast('Added to Want to Try.') },
   })
-  return <article className="post-card"><Link className={`post-visual ${toneFor(item.sourceId)}`} to={destinationFor(item.sourceType, item.sourceId)} aria-label={`Open ${item.title}`}><span className="post-tag">{sentenceCase(item.sourceType)}</span><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" /></Link><div className="post-copy"><p className="eyebrow">{sentenceCase(item.visibility)}{item.occurredAt ? ` · ${formatDateTime(item.occurredAt)}` : ''}</p><h2>{item.title}</h2>{item.subtitle && <p>{item.subtitle}</p>}{item.snippet && <p className="post-snippet">{item.snippet}</p>}<div className="post-meta"><Link to={destinationFor(item.sourceType, item.sourceId)}>View details <ArrowRight size={14} /></Link><button type="button" disabled={save.isPending} onClick={() => save.mutate()} aria-label={`Save ${item.title}`}><Heart size={15} /> Save</button></div>{save.isError && <small className="inline-error">{errorMessage(save.error)}</small>}</div></article>
+  const destination = destinationFor(item.sourceType, item.sourceId)
+  const sourceLabel = sentenceCase(item.sourceType)
+  return <article className="post-card">
+    <Link className={`post-visual ${toneFor(item.sourceId)}`} to={destination} aria-label={`Open ${item.title}`}>
+      <span className="post-tag">{sourceLabel}</span><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" />
+    </Link>
+    <div className="post-copy">
+      <p className="eyebrow">{item.occurredAt ? formatDateTime(item.occurredAt) : sentenceCase(item.visibility)}</p>
+      <Link className="post-title-link" to={destination}><h2>{item.title}</h2></Link>
+      {(item.subtitle || item.snippet) && <p className="post-snippet">{item.subtitle || item.snippet}</p>}
+      <div className="post-meta">
+        <Link className="post-author" to={destination}><span>{sourceLabel.slice(0, 1)}</span>{sourceLabel}<ArrowRight size={13} /></Link>
+        <button type="button" disabled={save.isPending} onClick={() => save.mutate()} aria-label={`Save ${item.title}`}><Heart size={16} /><span>{save.isPending ? 'Saving' : 'Save'}</span></button>
+      </div>
+      {save.isError && <small className="inline-error">{errorMessage(save.error)}</small>}
+    </div>
+  </article>
 }
 
 export function SavedPage() {
