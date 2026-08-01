@@ -7,6 +7,7 @@ FoodMind Web is the responsive React client for the FoodMind decision loop: reco
 - Memory-only access-token authentication with cookie-backed, single-flight refresh
 - Profile and complete preference management
 - Food and drink record history, creation, detail, editing, deletion, and ETag conflict recovery
+- Bounded record-image creation, direct storage transfer, finalisation, replacement, and deletion
 - Trusted groups, invitations, members, authorised feeds, recommendation sharing, and Want to Try
 - Recommendation context, ordered candidates, feedback, fallback disclosure, and true re-recommendation
 - Authorised Explore and Search with permission-safe unavailable states
@@ -15,7 +16,7 @@ FoodMind Web is the responsive React client for the FoodMind decision loop: reco
 - Backend-owned dashboard metrics and weekly recaps with accessible text/table alternatives
 - Responsive navigation, URL-backed filters, offline/error/empty states, keyboard focus, and reduced motion
 
-Not included: public follower feeds, polls, ordering, payment, maps, photo uploads, inferred pantry inventory, or browser access to private service origins.
+Not included: public follower feeds, polls, ordering, payment, maps, persisted photo display (the backend has no authorised read URL), inferred pantry inventory, or browser access to private service origins.
 
 ## Stack
 

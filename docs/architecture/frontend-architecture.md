@@ -131,10 +131,18 @@ another returned candidate without silently starting a new recommendation sessio
 ## Chatbot UI
 
 - Chatbot is for authorised platform search, summary, comparison, and navigation.
+- Users ask in natural language; the backend selects and returns the supported route unless an advanced caller explicitly supplies one.
 - It does not become the UI entry point for recommendation or cooking.
 - Source references remain visible and navigable.
 - Inaccessible or removed references show a permission-safe unavailable state.
 - Unsupported answers must not be rendered as confirmed facts.
+
+## Record media UI
+
+- The client follows the backend-owned create, direct PUT, finalise, and delete lifecycle.
+- The object-storage request receives only the returned allow-listed headers and never the FoodMind bearer token.
+- A local object URL may preview the selected image before save; it is revoked when no longer needed and never persisted.
+- Saved records show attachment status only until the backend supplies an authorised read/download contract.
 
 ## Analytics UI
 

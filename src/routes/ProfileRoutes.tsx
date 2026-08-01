@@ -39,7 +39,7 @@ export function ProfilePage() {
         <ProfileLink to="/history" icon={History} label="History" detail="Food and drink records in one timeline" />
         <ProfileLink to="/dashboard" icon={BarChart3} label="Dashboard" detail="Accessible backend-owned metrics and tables" />
         <ProfileLink to={`/weekly-recaps/${currentMonday()}`} icon={CalendarDays} label="Weekly recap" detail="The exact current backend week-start projection" />
-        <ProfileLink to="/chat" icon={MessageCircle} label="Chat" detail="Grounded search, summary, compare, and navigation" />
+        <ProfileLink to="/chat" icon={MessageCircle} label="Ask FoodMind" detail="Grounded search, summary, compare, and navigation" />
       </section>
       <div className="profile-grid">
         <section className="profile-card"><p className="eyebrow">Recent recommendation sessions</p><h2>Your latest decisions</h2>{recommendations.isLoading && <LoadingState label="Loading recommendation history…" />}{recommendations.isError && <ErrorState error={recommendations.error} onRetry={() => void recommendations.refetch()} />}{recommendations.isSuccess && !recommendationItems.length && <EmptyState title="No recommendations yet" message="Generate your first recommendation from Home." />}{recommendationItems.map((item) => <Link className="history-row" to={`/recommendations/${item.sessionId}`} key={item.sessionId}><span><Clock3 size={17} /></span><div><strong>{sentenceCase(item.status)}</strong><small>{formatDateTime(item.createdAt)} · {item.returnedCandidateCount || 0} candidates</small></div><ArrowRight size={16} /></Link>)}</section>

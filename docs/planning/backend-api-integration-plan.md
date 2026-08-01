@@ -150,8 +150,9 @@ For a media upload:
 4. Do not add the FoodMind bearer token to the object-store request.
 5. Finalize through `/media/{mediaAssetId}/finalise`.
 
-Initial Web release keeps this UI disabled because there is no authorized
-media-read URL for displaying the finished asset.
+The record form exposes this workflow with a local pre-save preview, explicit
+verification state, replacement, and deletion. After reload it shows only
+attachment status because the backend still has no authorized media-read URL.
 
 ## 4. Shared HTTP client
 
@@ -458,12 +459,13 @@ entry and identifier.
 
 | Method | Path | Frontend use |
 |---|---|---|
-| POST | `/media/uploads` | future upload initialization |
-| POST | `/media/{mediaAssetId}/finalise` | future upload completion |
-| DELETE | `/media/{mediaAssetId}` | future abandoned/removed upload |
+| POST | `/media/uploads` | declare a bounded record image and obtain a short-lived instruction |
+| POST | `/media/{mediaAssetId}/finalise` | verify the completed direct upload before record attachment |
+| DELETE | `/media/{mediaAssetId}` | clean up failed/replaced uploads or delete a stored record image |
 
-Release decision: no visible photo feature until an authorized read contract
-exists.
+Release decision: expose the complete backend lifecycle with a local preview
+and honest stored-asset status. Do not render a persisted image until an
+authorized read contract exists.
 
 ### 9.2 Authentication and current user
 
@@ -741,7 +743,8 @@ defines it.
 ### Gate C: media reads
 
 Upload/finalize/delete exist, but an authorized display/download URL does not.
-Keep photos out of the first visible release and track a backend enhancement.
+Keep persisted image rendering disabled and track a backend enhancement. The
+write/finalise/delete lifecycle remains available from record forms.
 
 ### Gate D: feedback projection
 

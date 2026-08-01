@@ -1,4 +1,4 @@
-import { Bookmark, ChefHat, Compass, Home, Leaf, Search, UserRound, Users, Utensils } from 'lucide-react'
+import { Bookmark, Bot, ChefHat, Compass, Home, Leaf, Plus, Search, UserRound, Users, Utensils } from 'lucide-react'
 import { useEffect, useState, type ComponentType } from 'react'
 import { Link, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthProvider'
@@ -65,7 +65,13 @@ export function AppShell() {
         </div>
 
         <div className="header-actions">
-          <button className="header-icon" type="button" aria-label="Search FoodMind" onClick={() => navigate('/explore?search=true')}>
+          <NavLink className={({ isActive }) => `assistant-button${isActive ? ' active' : ''}`} to="/chat" aria-label="Ask FoodMind chatbot">
+            <Bot size={18} /><span>Ask FoodMind</span>
+          </NavLink>
+          <Link className="header-icon add-action" to="/records/new" aria-label="Add a food or drink record">
+            <Plus size={19} />
+          </Link>
+          <button className="header-icon search-action" type="button" aria-label="Search FoodMind" onClick={() => navigate('/explore?search=true')}>
             <Search size={19} />
           </button>
           <Link className="avatar-button" to="/me" aria-label={`Open ${user?.displayName || 'your'} profile`}>

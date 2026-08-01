@@ -21,6 +21,9 @@ const reference = { cuisines: [], dietaryTags: [{ id: id('21'), code: 'VEGETARIA
 const preferences = { cuisineCodes: [], dietaryTagCodes: [], allergens: [], hardConstraints: { requiredDietaryTagCodes: [], allergens: [] }, preferredMealTypes: ['DINNER'], spiceTolerance: 2, budgetMin: 8, budgetMax: 30, currency: 'SGD', preferredArea: 'Orchard', maxDistanceKm: 5, minimumCleanlinessEvidenceScore: 0.8, version: 1 }
 const foodRecord = { id: id('31'), mealNameSnapshot: 'Hainanese chicken rice', placeNameSnapshot: 'Orchard Garden Kitchen', cuisineCode: 'SINGAPOREAN', cuisineName: 'Singaporean', occurredAt: '2026-07-30T12:30:00Z', price: { amount: 9.5, currency: 'SGD' }, rating: 4.5, comment: null, wouldEatAgain: true, visibility: 'PRIVATE', groupId: null, mediaAssetId: null, createdAt: now, updatedAt: now, version: 1 }
 const drinkRecord = { id: id('32'), drinkName: 'Iced matcha latte', shopNameSnapshot: 'Orchard Tea Bar', occurredAt: '2026-07-29T07:15:00Z', price: { amount: 5.8, currency: 'SGD' }, rating: 4, comment: null, sweetnessLevel: 2, iceLevel: 1, wouldBuyAgain: true, visibility: 'PRIVATE', groupId: null, mediaAssetId: null, createdAt: now, updatedAt: now, version: 1 }
+export const chatSession = { id: id('41'), title: 'Food history helper', status: 'ACTIVE', createdAt: now, updatedAt: now }
+const chatAssistant = { id: id('42'), sessionId: chatSession.id, role: 'ASSISTANT', content: 'Your recent favourites are grounded in the FoodMind sources shown below.', route: 'SUMMARY', responseStatus: 'SUCCEEDED', correlationId: id('43'), agentTraceId: 'agent-e2e', createdAt: now, sources: [] }
+const mediaAssetId = id('51')
 const metrics = [
   { code: 'FOOD_COUNT', label: 'Food records', period: '2026-07-13', value: 5, unit: 'COUNT', empty: false },
   { code: 'DRINK_COUNT', label: 'Drink records', period: '2026-07-13', value: 3, unit: 'COUNT', empty: false },
@@ -50,6 +53,10 @@ type MockOptions = {
   onGenerate?: (request: PlaywrightRequest) => void
   onGroupUpdate?: (request: PlaywrightRequest) => void
   onLegacyJoin?: (request: PlaywrightRequest) => void
+  onChatMessage?: (request: PlaywrightRequest) => void
+  onMediaDeclaration?: (request: PlaywrightRequest) => void
+  onMediaStorage?: (request: PlaywrightRequest) => void
+  onRecordCreate?: (request: PlaywrightRequest) => void
 }
 
 async function fulfill(route: Route, body: unknown, status = 200) {
@@ -57,6 +64,11 @@ async function fulfill(route: Route, body: unknown, status = 200) {
 }
 
 export async function mockApi(page: Page, options: MockOptions = {}) {
+  let chatMessages: unknown[] = []
+  await page.route('https://storage.example.test/**', async (route) => {
+    options.onMediaStorage?.(route.request())
+    await route.fulfill({ status: 200, body: '' })
+  })
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -87,13 +99,31 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === `/groups/${group.id}/members` && method === 'GET') return fulfill(route, members)
     if (path === `/groups/${group.id}/feed` && method === 'GET') return fulfill(route, { items: [], nextCursor: null })
     if (path === '/history' && method === 'GET') return fulfill(route, { entries: [], nextCursor: null })
+    if (path === '/food-records' && method === 'POST') {
+      options.onRecordCreate?.(request)
+      return fulfill(route, { ...foodRecord, ...request.postDataJSON(), id: id('33'), createdAt: now, updatedAt: now, version: 0 }, 201)
+    }
     if (path === '/food-records' && method === 'GET') return fulfill(route, { items: options.populated ? [foodRecord] : [], page: 0, size: Number(url.searchParams.get('size') || 20), totalElements: options.populated ? 1 : 0, totalPages: options.populated ? 1 : 0, hasNext: false })
     if (path === '/drink-records' && method === 'GET') return fulfill(route, { items: options.populated ? [drinkRecord] : [], page: 0, size: Number(url.searchParams.get('size') || 20), totalElements: options.populated ? 1 : 0, totalPages: options.populated ? 1 : 0, hasNext: false })
     if (path === '/explore' && method === 'GET') return fulfill(route, { items: [], nextCursor: null })
     if (path === '/search' && method === 'GET') return fulfill(route, { items: [], nextCursor: null, page: 0, size: 18, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/want-to-try' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 24, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/cooking-plans/history' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 8, totalElements: 0, totalPages: 0, hasNext: false })
-    if (path === '/chat/sessions' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 50, totalElements: 0, totalPages: 0, hasNext: false })
+    if (path === '/chat/sessions' && method === 'GET') return fulfill(route, { items: [chatSession], page: 0, size: 50, totalElements: 1, totalPages: 1, hasNext: false })
+    if (path === '/chat/sessions' && method === 'POST') return fulfill(route, { ...chatSession, title: request.postDataJSON().title }, 201)
+    if (path === `/chat/sessions/${chatSession.id}` && method === 'GET') return fulfill(route, chatSession)
+    if (path === `/chat/sessions/${chatSession.id}/messages` && method === 'GET') return fulfill(route, { items: chatMessages, nextCursor: null })
+    if (path === `/chat/sessions/${chatSession.id}/messages` && method === 'POST') {
+      options.onChatMessage?.(request)
+      chatMessages = [chatAssistant]
+      return fulfill(route, chatAssistant, 201)
+    }
+    if (path === '/media/uploads' && method === 'POST') {
+      options.onMediaDeclaration?.(request)
+      return fulfill(route, { mediaAssetId, status: 'PENDING', uploadUrl: 'https://storage.example.test/record-image', requiredHeaders: { 'Content-Type': 'image/png' }, expiresAt: '2026-07-31T12:05:00Z' }, 201)
+    }
+    if (path === `/media/${mediaAssetId}/finalise` && method === 'POST') return fulfill(route, { mediaAssetId, status: 'READY', contentType: 'image/png', byteSize: 5, createdAt: now, finalisedAt: now })
+    if (path === `/media/${mediaAssetId}` && method === 'DELETE') return fulfill(route, undefined, 204)
     if (path === '/dashboard' && method === 'GET') return fulfill(route, options.populated
       ? { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', groupBy: 'WEEK', timeZone: 'Asia/Singapore', empty: false, metrics, spendingTotals }
       : { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', groupBy: 'WEEK', timeZone: 'Asia/Singapore', empty: true, metrics: [], spendingTotals: [] })

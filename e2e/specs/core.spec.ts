@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { resolve } from 'node:path'
-import { group, mockApi, recommendation } from '../fixtures/api.js'
+import { chatSession, group, mockApi, recommendation } from '../fixtures/api.js'
 
 test('returns a direct protected route to sign-in without an authenticated refresh', async ({ page }) => {
   await mockApi(page, { authenticated: false })
@@ -75,7 +75,7 @@ test('all primary destinations render their documented empty or ready state', as
     ['/explore', /explore what your circles/i],
     ['/saved', /saved for the right moment/i],
     ['/cooking', /cook with what you know/i],
-    ['/chat', /^chat$/i],
+    ['/chat', /ask foodmind/i],
     ['/dashboard', /^dashboard$/i],
     ['/me', /^maya tan$/i],
     ['/me/preferences', /preferences/i],
@@ -133,4 +133,34 @@ test('preference field errors focus the exact backend-rejected control', async (
   await page.getByRole('button', { name: /save preferences/i }).click()
   await expect(page.getByText('Use a supported three-letter currency code.')).toBeVisible()
   await expect(page.getByLabel('Currency')).toBeFocused()
+})
+
+test('chatbot lets the backend route natural language and returns the grounded response', async ({ page }) => {
+  let messageBody: Record<string, unknown> = {}
+  await mockApi(page, { onChatMessage: (request) => { messageBody = request.postDataJSON() as Record<string, unknown> } })
+  await page.goto(`/chat/${chatSession.id}`)
+  await page.getByLabel('Message').fill('Summarise my recent favourites')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText(/recent favourites are grounded/i)).toBeVisible()
+  expect(messageBody).toEqual({ content: 'Summarise my recent favourites' })
+})
+
+test('record photo uses the bounded media lifecycle and never sends the bearer token to storage', async ({ page }) => {
+  let declarationBody: Record<string, unknown> = {}
+  let storageAuthorization: string | undefined
+  let recordBody: Record<string, unknown> = {}
+  await mockApi(page, {
+    onMediaDeclaration: (request) => { declarationBody = request.postDataJSON() as Record<string, unknown> },
+    onMediaStorage: (request) => { storageAuthorization = request.headers().authorization },
+    onRecordCreate: (request) => { recordBody = request.postDataJSON() as Record<string, unknown> },
+  })
+  await page.goto('/records/new')
+  await page.getByLabel('Meal name').fill('Photo meal')
+  await page.locator('input[type="file"]').setInputFiles({ name: 'meal.png', mimeType: 'image/png', buffer: Buffer.from('hello') })
+  await page.getByRole('button', { name: /add to history/i }).click()
+  await expect(page).toHaveURL(/\/records\/food\//)
+  expect(declarationBody).toMatchObject({ contentType: 'image/png', byteSize: 5 })
+  expect(declarationBody.checksumSha256).toMatch(/^[0-9a-f]{64}$/)
+  expect(storageAuthorization).toBeUndefined()
+  expect(recordBody.mediaAssetId).toBe('00000000-0000-4000-8000-000000000051')
 })

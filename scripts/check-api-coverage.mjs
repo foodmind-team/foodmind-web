@@ -51,4 +51,4 @@ if (uncovered.length || unknownUsages.length || staleExceptions.length) {
   throw new Error(details)
 }
 
-console.log(`API coverage passed: ${usages.size} operations used; ${exceptions.size} explicitly deferred by the approved media-read constraint.`)
+console.log(`API coverage passed: ${usages.size} operations used; ${exceptions.size} explicitly documented exceptions.`)

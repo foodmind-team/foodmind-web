@@ -1,11 +1,12 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, Check, Coffee, Edit3, Plus, Star, Trash2, Utensils } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Coffee, Edit3, Image, ImagePlus, Plus, ShieldCheck, Star, Trash2, Utensils, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, ApiError, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
+import { deleteRecordMedia, mediaValidationMessage, uploadRecordMedia } from '../lib/api/media'
 import { queryKeys } from '../lib/api/query-keys'
 import { quotedVersion } from '../lib/commands'
 import { formatDateTime, formatMoney, sentenceCase, toLocalDateTimeValue } from '../lib/format'
@@ -183,7 +184,7 @@ function booleanOrNull(value: string) {
   return value === 'true' ? true : value === 'false' ? false : null
 }
 
-function recordBody(values: RecordFormValues) {
+function recordBody(values: RecordFormValues, mediaAssetId?: string) {
   const common = {
     placeId: values.placeId || null,
     occurredAt: new Date(values.occurredAt).toISOString(),
@@ -193,6 +194,7 @@ function recordBody(values: RecordFormValues) {
     comment: values.comment || null,
     visibility: values.visibility,
     groupId: values.visibility === 'GROUP' ? values.groupId || null : null,
+    ...(mediaAssetId ? { mediaAssetId } : {}),
   } as const
   if (values.type === 'food') return { ...common, mealId: values.mealId || null, mealNameSnapshot: values.name, placeNameSnapshot: values.placeName || null, cuisineId: values.cuisineId || null, wouldEatAgain: booleanOrNull(values.repeatIntent) } satisfies Schema<'CreateFoodRecordRequest'>
   return { ...common, drinkName: values.name, shopNameSnapshot: values.placeName, sweetnessLevel: numberOrNull(values.sweetnessLevel), iceLevel: numberOrNull(values.iceLevel), wouldBuyAgain: booleanOrNull(values.repeatIntent) } satisfies Schema<'CreateDrinkRecordRequest'>
@@ -205,6 +207,10 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
   const { showToast } = useToast()
   const { groups, catalogue } = useRecordLookups()
   const [conflict, setConflict] = useState(false)
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const defaults = useMemo(() => recordDefaults(type, record, searchParams), [record, searchParams, type])
   const { register, handleSubmit, watch, reset, setError, formState: { errors, isSubmitting } } = useForm<RecordFormValues>({ values: defaults })
   const currentType = watch('type')
@@ -213,30 +219,55 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
   const candidateId = searchParams.get('candidateId')
 
   useEffect(() => reset({ ...defaults, type: currentType }), [currentType, defaults, reset])
+  useEffect(() => {
+    if (!photo) { setPhotoPreview(null); return }
+    const preview = URL.createObjectURL(photo)
+    setPhotoPreview(preview)
+    return () => URL.revokeObjectURL(preview)
+  }, [photo])
+
+  const choosePhoto = (file?: File) => {
+    if (!file) { setPhoto(null); setPhotoError(null); return }
+    const validation = mediaValidationMessage(file)
+    setPhotoError(validation)
+    setPhoto(validation ? null : file)
+  }
 
   const submit = handleSubmit(async (values) => {
     setConflict(false)
     if (!values.name.trim()) { setError('name', { message: currentType === 'food' ? 'Enter the meal name.' : 'Enter the drink name.' }); return }
     if (currentType === 'drink' && !values.placeName.trim()) { setError('placeName', { message: 'Enter the shop or place name.' }); return }
     if (visibility === 'GROUP' && !values.groupId) { setError('groupId', { message: 'Choose a group.' }); return }
+    if (photoError) return
+    let newMediaAssetId: string | null = null
+    let attachedToRecord = false
     try {
+      if (photo) {
+        setUploadingPhoto(true)
+        const asset = await uploadRecordMedia(photo)
+        newMediaAssetId = asset.mediaAssetId
+      }
       let saved: AnyRecord
       if (recordId) {
         const params = { path: { id: recordId }, header: { 'If-Match': quotedVersion(record!.version) } }
         saved = currentType === 'food'
-          ? dataOrThrow<FoodRecord>(await api.PATCH('/food-records/{id}', { body: recordBody(values) as Schema<'UpdateFoodRecordRequest'>, params }))
-          : dataOrThrow<DrinkRecord>(await api.PATCH('/drink-records/{id}', { body: recordBody(values) as Schema<'UpdateDrinkRecordRequest'>, params }))
+          ? dataOrThrow<FoodRecord>(await api.PATCH('/food-records/{id}', { body: recordBody(values, newMediaAssetId || undefined) as Schema<'UpdateFoodRecordRequest'>, params }))
+          : dataOrThrow<DrinkRecord>(await api.PATCH('/drink-records/{id}', { body: recordBody(values, newMediaAssetId || undefined) as Schema<'UpdateDrinkRecordRequest'>, params }))
       } else {
         saved = currentType === 'food'
-          ? dataOrThrow<FoodRecord>(await api.POST('/food-records', { body: recordBody(values) as Schema<'CreateFoodRecordRequest'> }))
-          : dataOrThrow<DrinkRecord>(await api.POST('/drink-records', { body: recordBody(values) as Schema<'CreateDrinkRecordRequest'> }))
+          ? dataOrThrow<FoodRecord>(await api.POST('/food-records', { body: recordBody(values, newMediaAssetId || undefined) as Schema<'CreateFoodRecordRequest'> }))
+          : dataOrThrow<DrinkRecord>(await api.POST('/drink-records', { body: recordBody(values, newMediaAssetId || undefined) as Schema<'CreateDrinkRecordRequest'> }))
       }
+      attachedToRecord = true
 
       if (!recordId && currentType === 'food' && sessionId && candidateId && saved.rating) {
-        await api.POST('/recommendations/{sessionId}/feedback', { body: { eventType: 'LATER_RATED', candidateId, rating: saved.rating, resultingFoodRecordId: saved.id }, params: { path: { sessionId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })
+        void api.POST('/recommendations/{sessionId}/feedback', { body: { eventType: 'LATER_RATED', candidateId, rating: saved.rating, resultingFoodRecordId: saved.id }, params: { path: { sessionId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })
         if ('wouldEatAgain' in saved && saved.wouldEatAgain !== null && saved.wouldEatAgain !== undefined) {
-          await api.POST('/recommendations/{sessionId}/feedback', { body: { eventType: 'WOULD_EAT_AGAIN', candidateId, booleanValue: saved.wouldEatAgain, resultingFoodRecordId: saved.id }, params: { path: { sessionId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })
+          void api.POST('/recommendations/{sessionId}/feedback', { body: { eventType: 'WOULD_EAT_AGAIN', candidateId, booleanValue: saved.wouldEatAgain, resultingFoodRecordId: saved.id }, params: { path: { sessionId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })
         }
+      }
+      if (newMediaAssetId && record?.mediaAssetId && record.mediaAssetId !== newMediaAssetId) {
+        void deleteRecordMedia(record.mediaAssetId).catch(() => showToast('Record updated, but the previous image could not be deleted. Try again from its record.', 'error'))
       }
       queryClient.setQueryData(queryKeys.records.detail(currentType, saved.id), saved)
       void queryClient.invalidateQueries({ queryKey: ['records'] })
@@ -247,6 +278,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
       showToast(recordId ? 'Record updated.' : 'Record added to your history.')
       navigate(`/records/${currentType}/${saved.id}`)
     } catch (error) {
+      if (newMediaAssetId && !attachedToRecord) await deleteRecordMedia(newMediaAssetId).catch(() => undefined)
       if (error instanceof ApiError && error.status === 409) setConflict(true)
       let mappedField = false
       if (error instanceof ApiError) error.fieldErrors.forEach((field) => {
@@ -261,6 +293,8 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
         }
       })
       if (!(error instanceof ApiError && error.status === 409) && !mappedField) setError('root', { message: errorMessage(error) })
+    } finally {
+      setUploadingPhoto(false)
     }
   })
 
@@ -283,8 +317,15 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
         {visibility === 'GROUP' && <label>Group<select {...register('groupId')} aria-invalid={Boolean(errors.groupId)}><option value="">Choose a group</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>{errors.groupId && <small>{errors.groupId.message}</small>}</label>}
       </div>
       <label>Notes<textarea rows={4} maxLength={4_000} {...register('comment')} />{errors.comment && <small>{errors.comment.message}</small>}</label>
+      <section className="media-upload-field" aria-labelledby="record-photo-title">
+        <div className="media-upload-copy"><span><ImagePlus /></span><div><p className="eyebrow">Optional photo</p><h2 id="record-photo-title">Add one secure image</h2><p>JPEG, PNG, or WebP · up to 5 MB. FoodMind verifies the file before attaching it to this record.</p></div></div>
+        {photoPreview ? <div className="media-preview"><img src={photoPreview} alt="Selected record upload preview" /><div><strong>{photo?.name}</strong><small>{photo ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : ''}</small><button className="text-button danger-link" type="button" onClick={() => choosePhoto()}><X size={15} /> Remove selection</button></div></div> : <label className="media-drop-control"><ImagePlus size={21} /><span><strong>{record?.mediaAssetId ? 'Replace the stored image' : 'Choose an image'}</strong><small>The file is uploaded only when you save the record.</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label>}
+        {record?.mediaAssetId && !photo && <p className="media-existing"><ShieldCheck size={16} /> This record already has a verified stored image. Choose another image to replace it.</p>}
+        {photoError && <div className="inline-error" role="alert">{photoError}</div>}
+        <p className="field-note">The backend does not yet provide an authorised image-read URL, so the saved asset cannot be displayed again after this local preview.</p>
+      </section>
       <p className="field-note">Optional fields cannot be explicitly cleared yet; the backend currently treats omitted and null values as unchanged on edits.</p>
-      <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving…' : recordId ? 'Save changes' : 'Add to history'} <Check size={17} /></button></div>
+      <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || uploadingPhoto}>{uploadingPhoto ? 'Securing image…' : isSubmitting ? 'Saving…' : recordId ? 'Save changes' : 'Add to history'} <Check size={17} /></button></div>
     </form>
   )
 }
@@ -292,7 +333,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
 export function RecordComposerPage() {
   const [searchParams] = useSearchParams()
   const type = searchParams.get('type') === 'drink' ? 'drink' : 'food'
-  return <div className="page section-page narrow-page"><header className="section-page-heading"><div><p className="eyebrow">A signal you control</p><h1>Record a meal or drink</h1><p>Keep the details that will be useful later. Photos stay off until authorised media reads are supported.</p></div></header><RecordForm type={type} /></div>
+  return <div className="page section-page narrow-page"><header className="section-page-heading"><div><p className="eyebrow">A signal you control</p><h1>Record a meal or drink</h1><p>Keep the details that will be useful later, with an optional backend-verified photo.</p></div></header><RecordForm type={type} /></div>
 }
 
 function useRecord(type: string, id: string) {
@@ -311,6 +352,8 @@ export function RecordDetailPage() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const [confirming, setConfirming] = useState(false)
+  const [confirmingMedia, setConfirmingMedia] = useState(false)
+  const [mediaDeleted, setMediaDeleted] = useState(false)
   const record = useRecord(recordType, id)
   const type: RecordType = recordType === 'drink' ? 'drink' : 'food'
   const remove = useMutation({
@@ -319,13 +362,17 @@ export function RecordDetailPage() {
       : dataOrThrow<void>(await api.DELETE('/drink-records/{id}', { params: { path: { id } } })),
     onSuccess: () => { queryClient.removeQueries({ queryKey: queryKeys.records.detail(type, id) }); void queryClient.invalidateQueries({ queryKey: ['records'] }); void queryClient.invalidateQueries({ queryKey: ['analytics'] }); void queryClient.invalidateQueries({ queryKey: ['groups'] }); void queryClient.invalidateQueries({ queryKey: ['explore'] }); void queryClient.invalidateQueries({ queryKey: ['search'] }); showToast('Record removed.'); navigate('/history') },
   })
+  const removeMedia = useMutation({
+    mutationFn: async (mediaAssetId: string) => deleteRecordMedia(mediaAssetId),
+    onSuccess: () => { setMediaDeleted(true); setConfirmingMedia(false); showToast('Stored image deleted. The record itself is unchanged.') },
+  })
   if (record.isLoading) return <div className="page"><LoadingState label="Opening this record…" /></div>
   if (record.isError) return <div className="page"><ErrorState error={record.error} onRetry={() => void record.refetch()} /></div>
   const data = record.data!
   const title = 'mealNameSnapshot' in data ? data.mealNameSnapshot : data.drinkName
   const place = 'mealNameSnapshot' in data ? data.placeNameSnapshot : data.shopNameSnapshot
   const repeat = 'mealNameSnapshot' in data ? data.wouldEatAgain : data.wouldBuyAgain
-  return <div className="page section-page narrow-page"><Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link><header className="record-hero"><span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div></header><section className="detail-card"><dl className="detail-grid"><div><dt>Rating</dt><dd>{data.rating ? `${data.rating} / 5` : 'Not rated'}</dd></div><div><dt>Price</dt><dd>{formatMoney(data.price?.amount, data.price?.currency)}</dd></div><div><dt>{type === 'food' ? 'Would eat again' : 'Would buy again'}</dt><dd>{repeat === null || repeat === undefined ? 'Not answered' : repeat ? 'Yes' : 'No'}</dd></div><div><dt>Last updated</dt><dd>{formatDateTime(data.updatedAt)}</dd></div></dl>{data.comment && <div className="note-block"><p className="eyebrow">Your note</p><p>{data.comment}</p></div>}<div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>{confirming && <div className="confirm-panel" role="alert" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}</section></div>
+  return <div className="page section-page narrow-page"><Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link><header className="record-hero"><span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div></header><section className="detail-card"><dl className="detail-grid"><div><dt>Rating</dt><dd>{data.rating ? `${data.rating} / 5` : 'Not rated'}</dd></div><div><dt>Price</dt><dd>{formatMoney(data.price?.amount, data.price?.currency)}</dd></div><div><dt>{type === 'food' ? 'Would eat again' : 'Would buy again'}</dt><dd>{repeat === null || repeat === undefined ? 'Not answered' : repeat ? 'Yes' : 'No'}</dd></div><div><dt>Last updated</dt><dd>{formatDateTime(data.updatedAt)}</dd></div></dl>{data.comment && <div className="note-block"><p className="eyebrow">Your note</p><p>{data.comment}</p></div>}{data.mediaAssetId && !mediaDeleted && <section className="stored-media-card"><span><Image /></span><div><p className="eyebrow">Image attachment</p><h2>This record references an uploaded image</h2><p>The current API exposes the attachment reference, but not an authorised read URL or current asset status.</p></div><button className="secondary-action danger" type="button" onClick={() => setConfirmingMedia(true)}><Trash2 size={16} /> Delete image</button></section>}{mediaDeleted && <p className="media-existing"><Check size={16} /> The stored image asset has been deleted.</p>}{confirmingMedia && data.mediaAssetId && <div className="confirm-panel" role="alert" aria-labelledby="delete-media-title"><h2 id="delete-media-title">Delete the stored image?</h2><p>This removes the backend media asset. The meal or drink record will remain.</p>{removeMedia.isError && <p className="inline-error">{errorMessage(removeMedia.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirmingMedia(false)}>Keep image</button><button className="primary-action danger" type="button" disabled={removeMedia.isPending} onClick={() => removeMedia.mutate(data.mediaAssetId!)}>Delete image</button></div></div>}<div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>{confirming && <div className="confirm-panel" role="alert" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.{data.mediaAssetId && !mediaDeleted ? ' Delete its stored image separately first if you no longer want that asset retained.' : ''}</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}</section></div>
 }
 
 export function RecordEditorPage() {

@@ -383,8 +383,10 @@ Update behavior:
 - do not offer clearing of optional fields until the backend defines explicit
   clear semantics.
 
-Media controls remain hidden in the first release because the backend has no
-authorized media-read/download response for rendering uploaded assets.
+Media controls expose the backend's bounded upload, finalise, replacement, and
+delete lifecycle. The form may show a local preview before saving, but it must
+not imply that a persisted image can be read until the backend adds an
+authorized media-read/download response.
 
 ### 6.4 Groups
 
