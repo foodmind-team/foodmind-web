@@ -1,221 +1,71 @@
 # FoodMind Web
 
-FoodMind Web is the responsive browser client for FoodMind. It presents the same business capabilities as the native Android application and consumes only the public Spring Boot API.
+FoodMind Web is the responsive React client for the FoodMind decision loop: record and share experience, generate a grounded recommendation, decide, and feed the outcome back into future choices. The application implements the current Spring Boot `/api/v1` contract and keeps authorization and business rules on the backend.
 
-> **Current status:** the Vite/React repository includes a responsive recommendation-first UX prototype with the two-mode home shell, Groups, Explore, Saved, and profile views. Backend integration, production routing, query management, charts, authentication, and automated tests remain to be implemented.
+## Included capabilities
 
-## Responsibilities
+- Memory-only access-token authentication with cookie-backed, single-flight refresh
+- Profile and complete preference management
+- Food and drink record history, creation, detail, editing, deletion, and ETag conflict recovery
+- Bounded record-image creation, direct storage transfer, finalisation, replacement, and deletion
+- Trusted groups, invitations, members, authorised feeds, recommendation sharing, and Want to Try
+- Recommendation context, ordered candidates, feedback, fallback disclosure, and true re-recommendation
+- Authorised Explore and Search with permission-safe unavailable states
+- Manual-ingredient cooking plans and cooking history
+- Grounded chat sessions, references, messages, comparison, summary, and navigation responses
+- Backend-owned dashboard metrics and weekly recaps with accessible text/table alternatives
+- Responsive navigation, URL-backed filters, offline/error/empty states, keyboard focus, and reduced motion
 
-The Web client is responsible for:
+Not included: public follower feeds, polls, ordering, payment, maps, persisted photo display (the backend has no authorised read URL), inferred pantry inventory, or browser access to private service origins.
 
-- Authentication screens and client-side session handling
-- Preference and profile forms
-- Food and drink record workflows
-- Personal history
-- Trusted groups, group feeds, and Want to Try
-- A recommendation-first home with an **Eat out & delivery / Cooking** mode switch
-- One prominent recommendation action and a lead-result presentation backed by the ordered candidate set
-- Recommendation feedback
-- Cooking-plan input and results from manually supplied pantry/inventory context
-- An authorised Explore surface for group-visible and curated platform posts
-- FoodMind Chatbot interactions
-- Dashboard and weekly recap presentation
-- Responsive layout, accessibility, and browser UX
+## Stack
 
-The Web client is not responsible for:
+React 19, TypeScript, Vite, React Router, TanStack Query, React Hook Form with Zod, Tailwind CSS tokens, Recharts, typed OpenAPI, Vitest, Testing Library, MSW, axe, and Playwright.
 
-- Authoritative business rules
-- Permission decisions
-- Recommendation filtering or scoring
-- Analytics calculations
-- Agent or inference-service calls
-- Storing secrets
+## Start locally
 
-## Technology Direction
-
-Currently installed:
-
-- React
-- TypeScript
-- Vite
-- Oxlint
-
-Planned by the canonical FoodMind design:
-
-- React Router
-- TanStack Query
-- Tailwind CSS
-- Recharts
-- A component-testing framework and Mock Service Worker
-
-Dependencies should be introduced only with the feature that uses them.
-
-## System Boundary
-
-```text
-Browser
-  → FoodMind Web
-  → HTTPS Spring Boot /api/v1
-  → Backend-owned domain, security, Agent, ML, and persistence flows
-```
-
-The browser must never receive Agent-service URLs, inference-service URLs, database credentials, AWS secrets, or internal service tokens.
-
-## Repository Structure
-
-```text
-foodmind-web/
-├── .github/workflows/        # CI/CD workflows
-├── docs/
-│   ├── architecture/         # Frontend architecture
-│   └── operations/           # Local development and deployment notes
-├── e2e/
-│   ├── fixtures/
-│   └── specs/
-├── public/                   # Static public assets
-└── src/
-    ├── app/
-    │   ├── providers/        # Global providers
-    │   └── router/           # Route configuration and guards
-    ├── components/
-    │   ├── ui/               # Reusable visual primitives
-    │   ├── layout/           # Page shells and navigation
-    │   └── feedback/         # Loading, error, and empty states
-    ├── features/
-    │   ├── auth/
-    │   ├── profile/
-    │   ├── records/
-    │   ├── groups/
-    │   ├── recommendations/
-    │   ├── cooking/
-    │   ├── chat/
-    │   └── analytics/
-    ├── lib/
-    │   ├── api/
-    │   ├── auth/
-    │   └── validation/
-    ├── routes/
-    ├── styles/
-    ├── test/
-    │   ├── fixtures/
-    │   └── mocks/
-    └── types/
-```
-
-## Feature Boundaries
-
-Each feature owns its page components, feature-specific components, hooks, request adapters, and tests. Shared components must remain domain-neutral.
-
-| Feature | Intended scope |
-| --- | --- |
-| `auth` | Login, registration, protected-route entry |
-| `profile` | User profile and preference management |
-| `records` | Food/drink create, edit, details, and history |
-| `groups` | Group membership, shared decisions, feed, visibility, and Want to Try |
-| `explore` | Authorised group-visible and curated post discovery; no public follower feed in the MVP |
-| `recommendations` | Group/personal context, lead recommendation, alternate candidates, and feedback |
-| `cooking` | Ingredient/time/budget input and structured plan |
-| `chat` | Sessions, messages, references, summary, and comparison |
-| `analytics` | Dashboard charts and weekly recap |
-
-Features should communicate through backend data and stable shared abstractions, not by importing another feature's internal components or query cache keys.
-
-## API Contract
-
-- Base path: `/api/v1`
-- Contract owner: `foodmind-backend`
-- Contract source: committed backend OpenAPI document
-- Authentication: JWT bearer token
-- Errors: stable backend error codes and field errors
-- Dates and timestamps: ISO 8601
-- IDs: opaque strings
-
-The Web client must not recalculate backend-owned values such as recommendation eligibility, acceptance rate, spending totals, or cuisine distribution.
-
-## Environment Variables
-
-Only variables prefixed with `VITE_` are exposed to browser code.
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_API_BASE_URL` | Public Spring Boot base URL |
-| `VITE_APP_ENV` | `local`, `staging`, or `production-demo` label |
-
-Do not place secrets in Vite environment variables. Values compiled into the bundle are public.
-
-## Local Development
+Use Node 24 (also pinned in `.node-version`), start the backend on port 8080, then:
 
 ```powershell
+Copy-Item .env.example .env.local
 npm ci
 npm run dev
 ```
 
-Quality checks:
+The browser always calls same-origin `/api/v1`. Vite reads the server-only `FOODMIND_BACKEND_ORIGIN` value and proxies those calls; no backend origin is compiled into browser JavaScript.
+
+## Quality commands
 
 ```powershell
+npm run api:check
+npm run api:coverage
 npm run lint
+npm run typecheck
+npm test -- --run
+npm run test:coverage
 npm run build
+npm run test:e2e
+npm run validate
 ```
 
-The repository does not yet have a test script. Add one alongside the selected test framework rather than documenting tests that do not exist.
+`api:check` confirms that the generated types match the committed OpenAPI snapshot and lock metadata. `api:coverage` proves that every backend operation has either a production consumer or an approved, documented contract blocker. `validate` runs both API gates, lint, type, test coverage, and the production build. Playwright is a separate deterministic browser gate.
 
-See [local development](docs/operations/local-development.md).
+## API contract
 
-## State Management Rules
+The immutable snapshot is in `contracts/backend-openapi-v1.yaml`; its backend commit and SHA-256 are recorded alongside it. Refresh tokens and CSRF companions returned by the compatibility response are deliberately not persisted. Access tokens exist only in module memory, while the browser forwards the backend's HttpOnly refresh cookie through the same-origin proxy.
 
-- TanStack Query should own remote server state.
-- Component state should own temporary interaction state.
-- URL state should represent shareable filters and navigation state.
-- Do not copy server responses into a second global store without a demonstrated need.
-- Query keys are stable and feature-owned.
-- Mutation success invalidates only the affected queries.
+To intentionally update the snapshot, first commit the backend contract and then run:
 
-## Authentication Rules
+```powershell
+npm run api:snapshot -- <backend-commit>
+npm run api:generate
+```
 
-- Prefer an agreed secure token-storage strategy based on the backend contract.
-- Never log access tokens.
-- Clear session state after authentication failure.
-- Route guards improve UX but do not provide security; backend checks remain authoritative.
-- Do not decode a JWT and treat its unverified contents as permission proof.
+## Documentation
 
-## UI and Accessibility
-
-- The home header exposes **Eat out & delivery** and **Cooking** as two clear modes; recommendation mode is the default.
-- The first viewport contains one unmistakable **Generate recommendation** action.
-- The API may return three intentionally different candidates, while the UI spotlights one lead choice and exposes the others through an explicit “try another” action.
-- Groups and Explore remain first-class labeled destinations; Explore must not imply public access to private or group-only records.
-- Every form field has a visible label and associated error.
-- Keyboard navigation works for forms, dialogs, menus, and Chatbot controls.
-- Loading, empty, error, and offline states are explicit.
-- Recommendation types are conveyed by text, not colour alone.
-- Charts include text summaries and accessible labels.
-- Responsive behaviour is tested at mobile, tablet, and desktop widths.
-- Food safety and hygiene language must remain decision-support language, not a guarantee.
-
-## Testing Strategy
-
-- Unit tests for pure formatting and validation adapters
-- Component tests for forms, cards, and state transitions
-- Query tests with mocked network responses
-- Accessibility checks for core pages
-- Contract fixtures generated from or verified against OpenAPI
-- End-to-end tests for UC-01 through UC-09
-- Shell tests for mode switching, primary recommendation generation, Groups navigation, and permission-safe Explore content
-- Permission/error-state scenarios shared with Android UAT
-
-## Contribution Workflow
-
-1. Link the work to an Issue and acceptance criteria.
-2. Confirm the backend OpenAPI version.
-3. Implement inside the owning feature.
-4. Include loading, empty, error, and success states.
-5. Add or update tests.
-6. Run lint, type checking, tests, and production build.
-7. Open a reviewed Pull Request.
-
-Do not copy backend or Android implementation code into this repository.
-
-## Further Reading
-
+- [Implementation plan](docs/planning/web-frontend-development-plan.md)
+- [Backend integration](docs/planning/backend-api-integration-plan.md)
+- [Testing and delivery](docs/planning/git-testing-and-delivery-plan.md)
 - [Frontend architecture](docs/architecture/frontend-architecture.md)
 - [Local development](docs/operations/local-development.md)
+- [Security review](docs/operations/security-review.md)

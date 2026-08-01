@@ -1,0 +1,4808 @@
+openapi: 3.1.0
+info:
+  title: FoodMind Backend API
+  version: v1
+  description: Public API contract for FoodMind clients.
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  headers:
+    CorrelationId:
+      description: Accepted or generated request correlation identifier.
+      schema:
+        type: string
+        maxLength: 128
+      example: postman-correlation-test
+  parameters:
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: Optional client-generated correlation identifier.
+      schema:
+        type: string
+        maxLength: 128
+      example: postman-correlation-test
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Stable key for retrying commands that must not duplicate work.
+      schema:
+        type: string
+        maxLength: 128
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Zero-based page index.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Bounded page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: Sort field and direction, for example createdAt,desc.
+      schema:
+        type: string
+  schemas:
+    CreateMediaUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [contentType, byteSize, checksumSha256]
+      properties:
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        byteSize:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 5242880
+        checksumSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          example: 24a740c376abe9a5dc3e2a4df541ba7a0cf5c18d5d65f0c8d522141689a308bb
+    MediaUploadInstructionResponse:
+      type: object
+      required: [mediaAssetId, status, uploadUrl, requiredHeaders, expiresAt]
+      properties:
+        mediaAssetId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING]
+        uploadUrl:
+          type: string
+          format: uri
+          description: Sensitive short-lived presigned URL. Never log or persist it.
+        requiredHeaders:
+          type: object
+          additionalProperties:
+            type: string
+          description: Exact allow-listed headers that must be sent to object storage.
+        expiresAt:
+          type: string
+          format: date-time
+    MediaAssetResponse:
+      type: object
+      required: [mediaAssetId, status, contentType, byteSize, createdAt]
+      properties:
+        mediaAssetId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, READY, DELETED]
+        contentType:
+          type: string
+        byteSize:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        finalisedAt:
+          type: string
+          format: date-time
+    ApiFieldError:
+      type: object
+      required:
+        - field
+        - code
+        - message
+      properties:
+        field:
+          type: string
+          example: price
+        code:
+          type: string
+          example: POSITIVE_OR_ZERO
+        message:
+          type: string
+          example: Price must be zero or greater.
+    ApiErrorResponse:
+      type: object
+      required:
+        - timestamp
+        - status
+        - code
+        - message
+        - path
+        - traceId
+        - fieldErrors
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-07-28T10:15:30Z"
+        status:
+          type: integer
+          example: 400
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - MALFORMED_JSON
+            - AUTHENTICATION_REQUIRED
+            - ACCESS_DENIED
+            - RESOURCE_NOT_FOUND
+            - CONFLICT
+            - IDEMPOTENCY_CONFLICT
+            - RATE_LIMITED
+            - UPSTREAM_UNAVAILABLE
+            - INTERNAL_ERROR
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: The request contains invalid fields.
+        path:
+          type: string
+          example: /api/v1/food-records
+        traceId:
+          type: string
+          example: trace-123
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiFieldError'
+    PageResponse:
+      type: object
+      required:
+        - items
+        - page
+        - size
+        - totalItems
+        - totalPages
+        - hasNext
+      properties:
+        items:
+          type: array
+          items: {}
+        page:
+          type: integer
+          minimum: 0
+          example: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 20
+        totalItems:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 0
+        totalPages:
+          type: integer
+          minimum: 0
+          example: 0
+        hasNext:
+          type: boolean
+          example: false
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - displayName
+        - password
+        - clientType
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          example: primary@example.test
+        displayName:
+          type: string
+          maxLength: 100
+          example: Primary User
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          example: correct horse battery
+        timeZone:
+          type: string
+          maxLength: 64
+          example: Asia/Singapore
+        clientType:
+          type: string
+          enum:
+            - WEB
+            - ANDROID
+          example: WEB
+        deviceLabel:
+          type: string
+          maxLength: 100
+          example: Pixel 9
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+        - clientType
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          example: primary@example.test
+        password:
+          type: string
+          format: password
+          maxLength: 128
+          example: correct horse battery
+        clientType:
+          type: string
+          enum:
+            - WEB
+            - ANDROID
+          example: WEB
+        deviceLabel:
+          type: string
+          maxLength: 100
+          example: Chrome on Windows
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 4096
+          description: Opaque refresh token for Android/Postman clients. Web clients may use the Secure HttpOnly cookie instead.
+          example: redacted-refresh-token
+        clientType:
+          type: string
+          enum:
+            - WEB
+            - ANDROID
+          example: ANDROID
+    AuthTokenResponse:
+      type: object
+      required:
+        - userId
+        - accessToken
+        - tokenType
+        - expiresIn
+        - expiresAt
+        - refreshToken
+        - refreshTokenExpiresAt
+        - csrfToken
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: 018fd1e4-5e5d-7a30-90d4-8d0d3f7f5d9c
+        accessToken:
+          type: string
+          description: Short-lived signed JWT access token.
+          example: redacted-access-jwt
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          example: 900
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-07-29T12:30:00Z"
+        refreshToken:
+          type: string
+          description: Opaque refresh token returned once; only a SHA-256 hash is stored by the backend.
+          example: redacted-refresh-token
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+          example: "2026-08-28T12:15:00Z"
+        csrfToken:
+          type: string
+          description: CSRF companion value for cookie-based web refresh/logout.
+          example: redacted-csrf-token
+    CurrentUserResponse:
+      type: object
+      required:
+        - id
+        - email
+        - displayName
+        - role
+        - status
+        - timeZone
+        - version
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 018fd1e4-5e5d-7a30-90d4-8d0d3f7f5d9c
+        email:
+          type: string
+          format: email
+          example: primary@example.test
+        displayName:
+          type: string
+          example: Primary User
+        role:
+          type: string
+          enum:
+            - USER
+            - ADMIN
+          example: USER
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - SUSPENDED
+            - DEACTIVATED
+          example: ACTIVE
+        timeZone:
+          type: string
+          example: Asia/Singapore
+        version:
+          type: integer
+          format: int64
+          example: 0
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-29T12:15:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-07-29T12:15:00Z"
+    UpdateCurrentUserRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          maxLength: 100
+          example: Primary User Updated
+        timeZone:
+          type: string
+          maxLength: 64
+          description: IANA timezone identifier.
+          example: Asia/Singapore
+    AllergenPreferenceRequest:
+      type: object
+      required:
+        - code
+        - severity
+      properties:
+        code:
+          type: string
+          maxLength: 40
+          example: PEANUT
+        severity:
+          type: string
+          maxLength: 20
+          example: SEVERE
+    AllergenPreference:
+      type: object
+      required:
+        - code
+        - severity
+      properties:
+        code:
+          type: string
+          example: PEANUT
+        severity:
+          type: string
+          example: SEVERE
+    ReplacePreferencesRequest:
+      type: object
+      properties:
+        budgetMin:
+          type: number
+          minimum: 0
+          example: 5
+        budgetMax:
+          type: number
+          minimum: 0
+          example: 25
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: SGD
+        spiceTolerance:
+          type: integer
+          minimum: 0
+          maximum: 5
+          example: 3
+        preferredArea:
+          type: string
+          maxLength: 120
+          example: Tiong Bahru
+        preferredLatitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 1.284
+        preferredLongitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 103.832
+        maxDistanceKm:
+          type: number
+          exclusiveMinimum: 0
+          example: 8
+        cleanlinessPriority:
+          type: integer
+          minimum: 0
+          maximum: 5
+          example: 4
+        minimumCleanlinessEvidenceScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Decision-support evidence threshold, not a safety certification.
+          example: 0.7
+        foodGoal:
+          type: string
+          maxLength: 40
+          example: BALANCED
+        drinkSweetnessPreference:
+          type: string
+          maxLength: 20
+          example: LOW
+        drinkIcePreference:
+          type: string
+          maxLength: 20
+          example: LESS
+        likedCuisineCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - SINGAPOREAN
+            - INDIAN
+        dislikedCuisineCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - JAPANESE
+        dietaryTagCodes:
+          type: array
+          description: Required dietary tags; these are hard constraints.
+          items:
+            type: string
+          example:
+            - VEGETARIAN
+        allergens:
+          type: array
+          description: User-declared allergens; these are hard constraints.
+          items:
+            $ref: '#/components/schemas/AllergenPreferenceRequest'
+        preferredMealTypes:
+          type: array
+          items:
+            type: string
+          example:
+            - LUNCH
+            - DINNER
+    HardConstraintSummary:
+      type: object
+      required:
+        - requiredDietaryTagCodes
+        - allergens
+      properties:
+        requiredDietaryTagCodes:
+          type: array
+          items:
+            type: string
+        allergens:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllergenPreference'
+    UserPreferencesResponse:
+      allOf:
+        - $ref: '#/components/schemas/ReplacePreferencesRequest'
+        - type: object
+          required:
+            - currency
+            - cleanlinessPriority
+            - likedCuisineCodes
+            - dislikedCuisineCodes
+            - dietaryTagCodes
+            - allergens
+            - preferredMealTypes
+            - hardConstraints
+            - version
+          properties:
+            allergens:
+              type: array
+              items:
+                $ref: '#/components/schemas/AllergenPreference'
+            hardConstraints:
+              $ref: '#/components/schemas/HardConstraintSummary'
+            createdAt:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2026-07-29T12:15:00Z"
+            updatedAt:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2026-07-29T12:15:00Z"
+            version:
+              type: integer
+              format: int64
+              example: 1
+    CatalogueReferenceItem:
+      type: object
+      required:
+        - id
+        - code
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 10000000-0000-4000-8000-000000000001
+        code:
+          type: string
+          example: SINGAPOREAN
+        name:
+          type: string
+          example: Singaporean
+    CatalogueReferenceDataResponse:
+      type: object
+      required:
+        - cuisines
+        - dietaryTags
+        - allergens
+        - mealTypes
+        - placeTypes
+      properties:
+        cuisines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogueReferenceItem'
+        dietaryTags:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogueReferenceItem'
+        allergens:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogueReferenceItem'
+        mealTypes:
+          type: array
+          items:
+            type: string
+          example:
+            - BREAKFAST
+            - LUNCH
+            - DINNER
+        placeTypes:
+          type: array
+          items:
+            type: string
+          example:
+            - CAFE
+            - CASUAL_DINING
+            - HAWKER_STALL
+    CatalogueMoney:
+      type: object
+      nullable: true
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          minimum: 0
+          example: 7.50
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: SGD
+    CataloguePlaceSummary:
+      type: object
+      nullable: true
+      required:
+        - id
+        - name
+        - area
+        - placeType
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 21000000-0000-4000-8000-000000000001
+        name:
+          type: string
+          example: Orchard Garden Kitchen
+        area:
+          type: string
+          example: Orchard
+        placeType:
+          type: string
+          example: CASUAL_DINING
+    CatalogueMealOffering:
+      type: object
+      required:
+        - id
+        - displayName
+        - price
+        - place
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 22000000-0000-4000-8000-000000000001
+        displayName:
+          type: string
+          example: Garden Chicken Rice
+        price:
+          $ref: '#/components/schemas/CatalogueMoney'
+        spiceLevel:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 5
+          example: 0
+        availabilityNote:
+          type: string
+          nullable: true
+          example: Synthetic demo availability; verify before travel.
+        place:
+          $ref: '#/components/schemas/CataloguePlaceSummary'
+    CatalogueMealResponse:
+      type: object
+      required:
+        - id
+        - name
+        - cuisine
+        - mealType
+        - dietaryTagCodes
+        - allergenCodes
+        - offerings
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 20000000-0000-4000-8000-000000000001
+        name:
+          type: string
+          example: Hainanese Chicken Rice
+        description:
+          type: string
+          nullable: true
+          example: Poached chicken with fragrant rice, cucumber, and a light soy dressing.
+        cuisine:
+          $ref: '#/components/schemas/CatalogueReferenceItem'
+        mealType:
+          type: string
+          example: LUNCH
+        defaultSpiceLevel:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 5
+          example: 0
+        dietaryTagCodes:
+          type: array
+          items:
+            type: string
+          example: []
+        allergenCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - GLUTEN
+            - SOY
+        offerings:
+          type: array
+          description: Active place-specific offerings; this is the eat-out recommendation candidate context.
+          items:
+            $ref: '#/components/schemas/CatalogueMealOffering'
+    CatalogueCoordinates:
+      type: object
+      nullable: true
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 1.304800
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 103.831800
+    CataloguePlaceObservation:
+      type: object
+      required:
+        - id
+        - observationType
+        - score
+        - sourceKind
+        - observedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 24000000-0000-4000-8000-000000000001
+        observationType:
+          type: string
+          example: CLEANLINESS
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Decision-support evidence score, not an inspection or safety certification.
+          example: 0.86
+        note:
+          type: string
+          nullable: true
+          example: Synthetic demo curation observation; not an inspection or safety certification.
+        sourceKind:
+          type: string
+          example: CURATED_DEMO
+        observedAt:
+          type: string
+          format: date-time
+          example: "2026-07-21T04:00:00Z"
+    CataloguePlaceOffering:
+      type: object
+      required:
+        - id
+        - displayName
+        - price
+        - mealId
+        - mealName
+        - mealType
+        - cuisineCode
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 22000000-0000-4000-8000-000000000001
+        displayName:
+          type: string
+          example: Garden Chicken Rice
+        price:
+          $ref: '#/components/schemas/CatalogueMoney'
+        spiceLevel:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 5
+          example: 0
+        availabilityNote:
+          type: string
+          nullable: true
+          example: Synthetic demo availability; verify before travel.
+        mealId:
+          type: string
+          format: uuid
+          example: 20000000-0000-4000-8000-000000000001
+        mealName:
+          type: string
+          example: Hainanese Chicken Rice
+        mealType:
+          type: string
+          example: LUNCH
+        cuisineCode:
+          type: string
+          example: SINGAPOREAN
+    CataloguePlaceResponse:
+      type: object
+      required:
+        - id
+        - name
+        - placeType
+        - area
+        - observations
+        - offerings
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 21000000-0000-4000-8000-000000000001
+        name:
+          type: string
+          example: Orchard Garden Kitchen
+        placeType:
+          type: string
+          example: CASUAL_DINING
+        area:
+          type: string
+          example: Orchard
+        addressText:
+          type: string
+          nullable: true
+          example: FoodMind synthetic demo listing, Orchard area
+        coordinates:
+          $ref: '#/components/schemas/CatalogueCoordinates'
+        priceBand:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 4
+          example: 2
+        observations:
+          type: array
+          items:
+            $ref: '#/components/schemas/CataloguePlaceObservation'
+        offerings:
+          type: array
+          items:
+            $ref: '#/components/schemas/CataloguePlaceOffering'
+    CatalogueProductResponse:
+      type: object
+      required:
+        - id
+        - name
+        - dietaryTagCodes
+        - allergenCodes
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 23000000-0000-4000-8000-000000000001
+        name:
+          type: string
+          example: Unsweetened Soy Drink
+        brand:
+          type: string
+          nullable: true
+          example: FoodMind Demo
+        description:
+          type: string
+          nullable: true
+          example: Shelf-stable unsweetened soy drink used as controlled demo catalogue data.
+        price:
+          $ref: '#/components/schemas/CatalogueMoney'
+        place:
+          $ref: '#/components/schemas/CataloguePlaceSummary'
+        dietaryTagCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - VEGAN
+            - VEGETARIAN
+        allergenCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - SOY
+    FoodRecordMoney:
+      type: object
+      nullable: true
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          minimum: 0
+          example: 7.50
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: SGD
+    CreateFoodRecordRequest:
+      type: object
+      required:
+        - mealNameSnapshot
+        - occurredAt
+      properties:
+        mealId:
+          type: string
+          format: uuid
+          nullable: true
+          example: 20000000-0000-4000-8000-000000000001
+        mealNameSnapshot:
+          type: string
+          maxLength: 160
+          example: Hainanese Chicken Rice
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+          example: 21000000-0000-4000-8000-000000000001
+        placeNameSnapshot:
+          type: string
+          maxLength: 160
+          nullable: true
+          example: Orchard Garden Kitchen
+        cuisineId:
+          type: string
+          format: uuid
+          nullable: true
+          example: 10000000-0000-4000-8000-000000000001
+        occurredAt:
+          type: string
+          format: date-time
+          example: "2026-07-28T04:15:00Z"
+        price:
+          type: number
+          minimum: 0
+          nullable: true
+          example: 7.50
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          nullable: true
+          example: SGD
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+          example: 4.5
+        comment:
+          type: string
+          maxLength: 4000
+          nullable: true
+          example: Tender chicken and bright chilli.
+        wouldEatAgain:
+          type: boolean
+          nullable: true
+          example: true
+        visibility:
+          type: string
+          enum:
+            - PRIVATE
+            - GROUP
+          default: PRIVATE
+          example: PRIVATE
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Rejected until Branch 07 supplies active group permission.
+        mediaAssetId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Must reference an owned READY media asset.
+    UpdateFoodRecordRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFoodRecordRequest'
+      description: Partial update body. Null and omitted values are not used to clear existing fields in this branch.
+    FoodRecordResponse:
+      type: object
+      required:
+        - id
+        - mealNameSnapshot
+        - occurredAt
+        - visibility
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        mealId:
+          type: string
+          format: uuid
+          nullable: true
+        mealNameSnapshot:
+          type: string
+          example: Hainanese Chicken Rice
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+        placeNameSnapshot:
+          type: string
+          nullable: true
+          example: Orchard Garden Kitchen
+        cuisineId:
+          type: string
+          format: uuid
+          nullable: true
+        cuisineCode:
+          type: string
+          nullable: true
+          example: SINGAPOREAN
+        cuisineName:
+          type: string
+          nullable: true
+          example: Singaporean
+        occurredAt:
+          type: string
+          format: date-time
+        price:
+          $ref: '#/components/schemas/FoodRecordMoney'
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+          description: Present on detail responses; list cards return null.
+        wouldEatAgain:
+          type: boolean
+          nullable: true
+        visibility:
+          type: string
+          enum:
+            - PRIVATE
+            - GROUP
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        mediaAssetId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Present on detail responses; list cards return null.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          example: 0
+    FoodRecordPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FoodRecordResponse'
+    CreateDrinkRecordRequest:
+      type: object
+      required:
+        - drinkName
+        - shopNameSnapshot
+        - occurredAt
+      properties:
+        drinkName:
+          type: string
+          maxLength: 160
+          example: Iced Matcha Latte
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+          example: 21000000-0000-4000-8000-000000000001
+        shopNameSnapshot:
+          type: string
+          maxLength: 160
+          example: Orchard Tea Bar
+        occurredAt:
+          type: string
+          format: date-time
+          example: "2026-07-28T04:15:00Z"
+        price:
+          type: number
+          minimum: 0
+          nullable: true
+          example: 5.80
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          nullable: true
+          example: SGD
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+          example: 4.5
+        comment:
+          type: string
+          maxLength: 4000
+          nullable: true
+          example: Clean tea flavour.
+        sweetnessLevel:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+          example: 2
+        iceLevel:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+          example: 1
+        wouldBuyAgain:
+          type: boolean
+          nullable: true
+          example: true
+        visibility:
+          type: string
+          enum:
+            - PRIVATE
+            - GROUP
+          default: PRIVATE
+          example: PRIVATE
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required for GROUP visibility and rejected for PRIVATE visibility.
+        mediaAssetId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Must reference an owned READY media asset.
+    UpdateDrinkRecordRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateDrinkRecordRequest'
+      description: Partial update body. Null and omitted values are not used to clear existing fields in this branch.
+    DrinkRecordResponse:
+      type: object
+      required:
+        - id
+        - drinkName
+        - shopNameSnapshot
+        - occurredAt
+        - visibility
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        drinkName:
+          type: string
+          example: Iced Matcha Latte
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+        shopNameSnapshot:
+          type: string
+          example: Orchard Tea Bar
+        occurredAt:
+          type: string
+          format: date-time
+        price:
+          $ref: '#/components/schemas/FoodRecordMoney'
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+          description: Present on detail responses; list cards return null.
+        sweetnessLevel:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+        iceLevel:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+        wouldBuyAgain:
+          type: boolean
+          nullable: true
+        visibility:
+          type: string
+          enum:
+            - PRIVATE
+            - GROUP
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        mediaAssetId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Present on detail responses; list cards return null.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          example: 0
+    DrinkRecordPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/DrinkRecordResponse'
+    HistoryResponse:
+      type: object
+      required:
+        - fromUtcInclusive
+        - toUtcExclusive
+        - period
+        - types
+        - timeZone
+        - buckets
+        - entries
+      properties:
+        fromUtcInclusive:
+          type: string
+          format: date-time
+          description: UTC lower bound derived once from the requested local or offset boundary.
+        toUtcExclusive:
+          type: string
+          format: date-time
+          description: UTC exclusive upper bound derived once from the requested local or offset boundary.
+        period:
+          type: string
+          enum:
+            - DAY
+            - WEEK
+            - MONTH
+        types:
+          type: array
+          items:
+            type: string
+            enum:
+              - FOOD
+              - DRINK
+        timeZone:
+          type: string
+          example: Asia/Singapore
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryBucket'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor using occurredAt DESC, sourceType ASC, sourceId DESC ordering.
+    HistoryBucket:
+      type: object
+      required:
+        - bucketStart
+        - totalCount
+        - foodCount
+        - drinkCount
+      properties:
+        bucketStart:
+          type: string
+          format: date
+          description: Local DAY/WEEK/MONTH bucket start. Weeks start on Monday.
+        totalCount:
+          type: integer
+          format: int64
+          minimum: 0
+        foodCount:
+          type: integer
+          format: int64
+          minimum: 0
+        drinkCount:
+          type: integer
+          format: int64
+          minimum: 0
+    HistoryEntry:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+        - occurredAt
+        - localBucketStart
+        - title
+      properties:
+        sourceType:
+          type: string
+          enum:
+            - FOOD
+            - DRINK
+        sourceId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        localBucketStart:
+          type: string
+          format: date
+        title:
+          type: string
+          example: Monday Milk Tea
+        context:
+          type: string
+          nullable: true
+          example: Orchard Tea Bar
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        cuisineId:
+          type: string
+          format: uuid
+          nullable: true
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+        repeatIntent:
+          type: boolean
+          nullable: true
+    CreateGroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          example: Lunch Crew
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+    UpdateGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - ARCHIVED
+    GroupResponse:
+      type: object
+      required:
+        - id
+        - name
+        - createdByUserId
+        - status
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        createdByUserId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - ARCHIVED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    CreateInvitationRequest:
+      type: object
+      properties:
+        expiresInMinutes:
+          type: integer
+          minimum: 1
+          maximum: 43200
+        expiresInHours:
+          type: integer
+          minimum: 1
+          maximum: 720
+          default: 72
+        maxUses:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+    GroupInvitationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: Raw invitation token returned once. The backend stores only its SHA-256 hash.
+        expiresAt:
+          type: string
+          format: date-time
+        maxUses:
+          type: integer
+        useCount:
+          type: integer
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - EXHAUSTED
+            - REVOKED
+            - EXPIRED
+    JoinGroupRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          maxLength: 256
+    GroupMemberResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+            - OWNER
+            - MEMBER
+        joinedAt:
+          type: string
+          format: date-time
+    GroupFeedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupFeedItem'
+        nextCursor:
+          type: string
+          nullable: true
+    GroupFeedItem:
+      type: object
+      properties:
+        sourceType:
+          type: string
+          enum:
+            - FOOD_RECORD
+            - RECOMMENDATION_SHARE
+        sourceId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        actorUserId:
+          type: string
+          format: uuid
+        actorDisplayName:
+          type: string
+        foodRecordId:
+          type: string
+          format: uuid
+          nullable: true
+        mealNameSnapshot:
+          type: string
+          nullable: true
+        recommendationShareId:
+          type: string
+          format: uuid
+          nullable: true
+        recommendationCandidateId:
+          type: string
+          format: uuid
+          nullable: true
+        message:
+          type: string
+          nullable: true
+    ShareRecommendationRequest:
+      type: object
+      required:
+        - recommendationCandidateId
+      properties:
+        recommendationCandidateId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          nullable: true
+          maxLength: 2000
+    GroupRecommendationShareResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        sharedByUserId:
+          type: string
+          format: uuid
+        recommendationCandidateId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    RecommendationConstraintsRequest:
+      type: object
+      properties:
+        avoidAllergenCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - PEANUT
+        requiredDietaryTagCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - VEGETARIAN
+        maxSpiceLevel:
+          type: integer
+          minimum: 0
+          maximum: 5
+          example: 3
+        minimumCleanlinessEvidenceScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Decision-support evidence threshold; missing evidence cannot satisfy this threshold.
+          example: 0.8
+    GenerateRecommendationRequest:
+      type: object
+      properties:
+        parentSessionId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional owned parent session for a true re-recommendation. The old session remains immutable.
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional active group. Group evidence is resolved server-side and never accepted in the request body.
+        mealType:
+          type: string
+          maxLength: 40
+          example: DINNER
+        maxBudget:
+          type: number
+          minimum: 0
+          example: 25
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: SGD
+        area:
+          type: string
+          maxLength: 120
+          example: Tiong Bahru
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 1.284
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 103.832
+        maxDistanceKm:
+          type: number
+          exclusiveMinimum: 0
+          example: 12
+        mood:
+          type: string
+          maxLength: 120
+          example: COMFORT
+        requestedFor:
+          type: string
+          format: date-time
+          example: "2030-07-30T12:00:00Z"
+        constraints:
+          $ref: '#/components/schemas/RecommendationConstraintsRequest'
+    RecommendationMoney:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          minimum: 0
+          example: 9.50
+        currency:
+          type: string
+          example: SGD
+    RecommendationCandidateResponse:
+      type: object
+      required:
+        - candidateId
+        - placeMealId
+        - mealId
+        - mealName
+        - placeId
+        - placeName
+        - recommendationType
+        - rank
+        - reasonCodes
+        - explanation
+      properties:
+        candidateId:
+          type: string
+          format: uuid
+        placeMealId:
+          type: string
+          format: uuid
+        mealId:
+          type: string
+          format: uuid
+        mealName:
+          type: string
+        placeId:
+          type: string
+          format: uuid
+        placeName:
+          type: string
+        area:
+          type: string
+        price:
+          $ref: '#/components/schemas/RecommendationMoney'
+        recommendationType:
+          type: string
+          enum:
+            - PERSONAL
+            - EXPLORATORY
+            - GROUP_INSPIRED
+        rank:
+          type: integer
+          minimum: 1
+          maximum: 3
+        reasonCodes:
+          type: array
+          items:
+            type: string
+            enum:
+              - CUISINE_MATCH
+              - WITHIN_BUDGET
+              - SPICE_MATCH
+              - NEARBY
+              - NOT_RECENTLY_REPEATED
+              - SIMILAR_USERS_LIKED
+              - SIMILAR_TO_LIKED_MEALS
+              - TRUSTED_GROUP_RATING
+              - WANT_TO_TRY
+        reasons:
+          type: array
+          items:
+            type: string
+          description: Backward-compatible alias for reasonCodes.
+        explanation:
+          type: string
+          description: Allow-listed grounded text. Model or fallback scores are never used as the explanation.
+    RecommendationResponse:
+      type: object
+      required:
+        - sessionId
+        - traceId
+        - status
+        - modelStatus
+        - fallbackStatus
+        - fallbackVersion
+        - items
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        traceId:
+          type: string
+        status:
+          type: string
+          enum:
+            - FALLBACK_SUCCEEDED
+            - NO_VALID_CANDIDATE
+        modelStatus:
+          type: string
+          example: NOT_REQUESTED
+        modelVersion:
+          type: string
+          nullable: true
+        fallbackStatus:
+          type: string
+          enum:
+            - SUCCEEDED
+            - NO_VALID_CANDIDATE
+        fallbackVersion:
+          type: string
+          example: fallback-v1
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/RecommendationCandidateResponse'
+        candidates:
+          type: array
+          maxItems: 3
+          description: Backward-compatible alias for items.
+          items:
+            $ref: '#/components/schemas/RecommendationCandidateResponse'
+    RecommendationFeedbackRequest:
+      type: object
+      required:
+        - eventType
+      properties:
+        candidateId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required for candidate-level events; null only for RERECOMMEND_REQUESTED.
+        eventType:
+          type: string
+          enum:
+            - ACCEPTED
+            - REJECTED
+            - RERECOMMEND_REQUESTED
+            - LATER_RATED
+            - WOULD_EAT_AGAIN
+        reasonCode:
+          type: string
+          nullable: true
+          enum:
+            - TOO_EXPENSIVE
+            - TOO_FAR
+            - NOT_IN_MOOD
+            - DIETARY_CONCERN
+            - ALLERGEN_CONCERN
+            - RECENTLY_EATEN
+            - PLACE_CONCERN
+            - OTHER
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+        booleanValue:
+          type: boolean
+          nullable: true
+        resultingFoodRecordId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional owned food record for later-signal events; must match the recommendation context.
+        effectiveUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional rejection constraint cutoff. The backend caps it to the configured reason duration.
+    RecommendationFeedbackResponse:
+      type: object
+      required:
+        - feedbackId
+        - sessionId
+        - eventType
+        - createdAt
+      properties:
+        feedbackId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        candidateId:
+          type: string
+          format: uuid
+          nullable: true
+        eventType:
+          type: string
+        reasonCode:
+          type: string
+          nullable: true
+        rating:
+          type: number
+          nullable: true
+        booleanValue:
+          type: boolean
+          nullable: true
+        resultingFoodRecordId:
+          type: string
+          format: uuid
+          nullable: true
+        effectiveUntil:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        supervisedLabel:
+          type: integer
+          nullable: true
+          enum:
+            - 0
+            - 1
+    RecommendationSessionSummary:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        fallbackStatus:
+          type: string
+        fallbackVersion:
+          type: string
+        returnedCandidateCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    RecommendationHistoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/RecommendationSessionSummary'
+    CookingIngredientRequest:
+      type: object
+      required:
+        - ingredientName
+      properties:
+        ingredientName:
+          type: string
+          minLength: 1
+          maxLength: 160
+          example: Firm tofu
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          nullable: true
+          example: 300
+        unit:
+          type: string
+          maxLength: 40
+          nullable: true
+          example: g
+        source:
+          type: string
+          enum:
+            - MANUAL
+            - AUTHORISED_PANTRY
+          default: MANUAL
+    GenerateCookingPlanRequest:
+      type: object
+      required:
+        - ingredients
+        - servings
+      properties:
+        ingredients:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/CookingIngredientRequest'
+        servings:
+          type: integer
+          minimum: 1
+          maximum: 24
+          example: 2
+        maxMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          nullable: true
+          example: 60
+        maxBudget:
+          type: number
+          minimum: 0
+          nullable: true
+          example: 20
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          nullable: true
+          example: SGD
+        requiredDietaryTagCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - VEGAN
+        avoidAllergenCodes:
+          type: array
+          items:
+            type: string
+          example:
+            - PEANUT
+    CookingPlanInputResponse:
+      type: object
+      properties:
+        ingredientName:
+          type: string
+        quantity:
+          type: number
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum:
+            - MANUAL
+            - AUTHORISED_PANTRY
+    CookingPlanIngredientResponse:
+      type: object
+      properties:
+        sequenceNo:
+          type: integer
+          minimum: 1
+        ingredientName:
+          type: string
+        quantity:
+          type: number
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        availability:
+          type: string
+          enum:
+            - AVAILABLE
+            - TO_BUY
+    CookingPlanStepResponse:
+      type: object
+      properties:
+        stepNo:
+          type: integer
+          minimum: 1
+        instruction:
+          type: string
+          maxLength: 4000
+    CookingPlanWarningResponse:
+      type: object
+      properties:
+        sequenceNo:
+          type: integer
+          minimum: 1
+        warningCode:
+          type: string
+          example: BUDGET_ESTIMATE_ONLY
+        message:
+          type: string
+          maxLength: 1000
+    CookingPlanResponse:
+      type: object
+      required:
+        - planId
+        - traceId
+        - status
+        - fallbackStatus
+        - inputs
+        - ingredients
+        - steps
+        - warnings
+      properties:
+        planId:
+          type: string
+          format: uuid
+        traceId:
+          type: string
+        status:
+          type: string
+          enum:
+            - SUCCEEDED
+            - FALLBACK_SUCCEEDED
+            - NO_VALID_RECIPE
+            - FAILED
+        sourceRecipeId:
+          type: string
+          format: uuid
+          nullable: true
+        agentContractVersion:
+          type: string
+          nullable: true
+          example: cooking-agent-v1
+        fallbackStatus:
+          type: string
+          enum:
+            - NOT_REQUIRED
+            - SUCCEEDED
+            - NO_VALID_RECIPE
+            - FAILED
+        fallbackVersion:
+          type: string
+          nullable: true
+          example: cooking-fallback-v1
+        failureCode:
+          type: string
+          nullable: true
+          example: NO_RECIPE_MATCH
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanInputResponse'
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanIngredientResponse'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanStepResponse'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanWarningResponse'
+    CookingPlanSummary:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        sourceRecipeId:
+          type: string
+          format: uuid
+          nullable: true
+        inputCount:
+          type: integer
+          minimum: 0
+        stepCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+    CookingPlanHistoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CookingPlanSummary'
+    WantToTrySourceType:
+      type: string
+      enum:
+        - FOOD_RECORD
+        - MEAL
+        - FOOD_PRODUCT
+        - PLACE
+    SaveWantToTryRequest:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+      properties:
+        sourceType:
+          $ref: '#/components/schemas/WantToTrySourceType'
+        sourceId:
+          type: string
+          format: uuid
+        note:
+          type: string
+          maxLength: 2000
+          nullable: true
+    WantToTrySourceSummary:
+      type: object
+      nullable: true
+      properties:
+        title:
+          type: string
+        subtitle:
+          type: string
+          nullable: true
+        snippet:
+          type: string
+          nullable: true
+          maxLength: 500
+        imageReference:
+          type: string
+          nullable: true
+        visibility:
+          type: string
+          nullable: true
+          enum:
+            - PRIVATE
+            - GROUP
+            - CURATED
+        ownerUserId:
+          type: string
+          format: uuid
+          nullable: true
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+          nullable: true
+    WantToTryResponse:
+      type: object
+      required:
+        - id
+        - sourceType
+        - sourceId
+        - createdAt
+        - sourceAvailable
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceType:
+          $ref: '#/components/schemas/WantToTrySourceType'
+        sourceId:
+          type: string
+          format: uuid
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        sourceAvailable:
+          type: boolean
+          description: False means the saved row remains owner-visible, but the live source no longer resolves for this actor.
+        source:
+          $ref: '#/components/schemas/WantToTrySourceSummary'
+    WantToTryPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/WantToTryResponse'
+    SearchSourceType:
+      type: string
+      enum:
+        - FOOD_RECORD
+        - FOOD_PRODUCT
+        - PLACE
+    SearchResultResponse:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+        - title
+        - visibility
+      properties:
+        sourceType:
+          $ref: '#/components/schemas/SearchSourceType'
+        sourceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        subtitle:
+          type: string
+          nullable: true
+        snippet:
+          type: string
+          nullable: true
+          maxLength: 500
+        imageReference:
+          type: string
+          nullable: true
+        relevance:
+          type: number
+          nullable: true
+        visibility:
+          type: string
+          enum:
+            - PRIVATE
+            - GROUP
+            - CURATED
+        ownerUserId:
+          type: string
+          format: uuid
+          nullable: true
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+          nullable: true
+    SearchPageResponse:
+      type: object
+      required:
+        - items
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResultResponse'
+        nextCursor:
+          type: string
+          nullable: true
+        hasNext:
+          type: boolean
+    ExploreSourceType:
+      type: string
+      enum:
+        - GROUP_RECORD
+        - CURATED_PRODUCT
+        - CURATED_PLACE
+    ExploreResultResponse:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+        - title
+        - visibility
+      properties:
+        sourceType:
+          $ref: '#/components/schemas/ExploreSourceType'
+        sourceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        subtitle:
+          type: string
+          nullable: true
+        snippet:
+          type: string
+          nullable: true
+          maxLength: 500
+        imageReference:
+          type: string
+          nullable: true
+        visibility:
+          type: string
+          enum:
+            - GROUP
+            - CURATED
+        ownerUserId:
+          type: string
+          format: uuid
+          nullable: true
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+          nullable: true
+    ExplorePageResponse:
+      type: object
+      required:
+        - items
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreResultResponse'
+        nextCursor:
+          type: string
+          nullable: true
+        hasNext:
+          type: boolean
+    CreateChatSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+          maxLength: 160
+    PostChatMessageRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 12000
+        referenceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+        route:
+          type: string
+          nullable: true
+          enum:
+            - SEARCH
+            - SUMMARY
+            - COMPARE
+            - NAVIGATION
+            - OUT_OF_SCOPE
+    ShareChatReferenceRequest:
+      type: object
+      required:
+        - sourceType
+        - sourceId
+      properties:
+        sourceType:
+          type: string
+          enum:
+            - FOOD_RECORD
+            - FOOD_PRODUCT
+            - PLACE
+        sourceId:
+          type: string
+          format: uuid
+    ChatSessionResponse:
+      type: object
+      required:
+        - id
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - ARCHIVED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ChatReferenceResponse:
+      type: object
+      required:
+        - id
+        - origin
+        - sourceType
+        - sourceId
+        - available
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        origin:
+          type: string
+          enum:
+            - USER_SHARED
+            - MESSAGE_INTRODUCED
+        introducedByMessageId:
+          type: string
+          format: uuid
+          nullable: true
+        sourceType:
+          type: string
+          enum:
+            - FOOD_RECORD
+            - FOOD_PRODUCT
+            - PLACE
+        sourceId:
+          type: string
+          format: uuid
+        available:
+          type: boolean
+        title:
+          type: string
+          nullable: true
+        snippet:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    ChatMessageSourceResponse:
+      type: object
+      required:
+        - referenceId
+        - sourceType
+        - sourceId
+        - sequenceNo
+      properties:
+        referenceId:
+          type: string
+          format: uuid
+        sourceType:
+          type: string
+          enum:
+            - FOOD_RECORD
+            - FOOD_PRODUCT
+            - PLACE
+        sourceId:
+          type: string
+          format: uuid
+        sequenceNo:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          nullable: true
+        snippet:
+          type: string
+          nullable: true
+    ChatMessageResponse:
+      type: object
+      required:
+        - id
+        - sessionId
+        - role
+        - content
+        - correlationId
+        - createdAt
+        - sources
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+            - USER
+            - ASSISTANT
+        content:
+          type: string
+          maxLength: 12000
+        route:
+          type: string
+          nullable: true
+          enum:
+            - SEARCH
+            - SUMMARY
+            - COMPARE
+            - NAVIGATION
+            - OUT_OF_SCOPE
+        responseStatus:
+          type: string
+          nullable: true
+          enum:
+            - SUCCEEDED
+            - FALLBACK_SUCCEEDED
+            - UNSUPPORTED
+            - FAILED
+        correlationId:
+          type: string
+          format: uuid
+        agentTraceId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessageSourceResponse'
+    ChatSessionPageResponse:
+      type: object
+      required:
+        - items
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatSessionResponse'
+        nextCursor:
+          type: string
+          nullable: true
+        hasNext:
+          type: boolean
+    ChatMessagePageResponse:
+      type: object
+      required:
+        - items
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessageResponse'
+        nextCursor:
+          type: string
+          nullable: true
+        hasNext:
+          type: boolean
+    DashboardMetricResponse:
+      type: object
+      required:
+        - code
+        - label
+        - period
+        - unit
+        - empty
+      properties:
+        code:
+          type: string
+          example: SPENDING_TOTAL
+        label:
+          type: string
+          example: Spending total
+        period:
+          type: string
+          format: date
+        value:
+          type: number
+          nullable: true
+          example: 24.50
+        unit:
+          type: string
+          enum: [COUNT, RATING, RATE, MONEY]
+        currency:
+          type: string
+          nullable: true
+          example: SGD
+        samples:
+          type: integer
+          format: int64
+          nullable: true
+        denominator:
+          type: integer
+          format: int64
+          nullable: true
+        empty:
+          type: boolean
+          description: True when the metric denominator or value is undefined; clients must not invent zero.
+        dimension:
+          type: string
+          nullable: true
+          example: SGD
+        dimensionLabel:
+          type: string
+          nullable: true
+          example: Singapore dollar
+    DashboardResponse:
+      type: object
+      required: [from, to, groupBy, timeZone, empty, metrics, spendingTotals]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        groupBy:
+          type: string
+          enum: [DAY, WEEK, MONTH]
+        timeZone:
+          type: string
+          example: Asia/Singapore
+        empty:
+          type: boolean
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardMetricResponse'
+        spendingTotals:
+          type: array
+          description: Convenience subset of metrics containing one total per currency and period.
+          items:
+            $ref: '#/components/schemas/DashboardMetricResponse'
+    WeeklyRecapResponse:
+      type: object
+      required: [weekStart, timeZone, empty, metrics, spendingTotals]
+      properties:
+        weekStart:
+          type: string
+          format: date
+        timeZone:
+          type: string
+        empty:
+          type: boolean
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardMetricResponse'
+        spendingTotals:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardMetricResponse'
+  responses:
+    BadRequest:
+      description: Request validation or JSON parsing failed.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Unauthorized:
+      description: Authentication is required or invalid.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Forbidden:
+      description: Authenticated principal is not permitted.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    NotFound:
+      description: Resource was not found or cannot be disclosed.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Conflict:
+      description: Request conflicts with current resource state.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    TooManyRequests:
+      description: Request rate limit exceeded.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    ServiceUnavailable:
+      description: Upstream dependency is unavailable.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    InternalError:
+      description: Unexpected safe server error.
+      headers:
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+paths:
+  /media/uploads:
+    post:
+      tags: [Media]
+      summary: Create a bounded, owner-controlled pending image upload.
+      description: Returns a sensitive short-lived presigned PUT instruction. Clients must not log, share, or send the Backend bearer token to the returned URL.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMediaUploadRequest'
+      responses:
+        '201':
+          description: Pending asset and one short-lived upload instruction.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaUploadInstructionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /media/{mediaAssetId}/finalise:
+    post:
+      tags: [Media]
+      summary: Verify uploaded object metadata and make an owned asset READY.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mediaAssetId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Verified READY asset; repeating the call is idempotent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaAssetResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503':
+          description: Object storage could not be reached; no storage error details are disclosed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiErrorResponse' }
+  /media/{mediaAssetId}:
+    delete:
+      tags: [Media]
+      summary: Soft-delete an owned asset and schedule idempotent object cleanup.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mediaAssetId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Asset deactivated; physical deletion is retried if needed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /dashboard:
+    get:
+      tags:
+        - Analytics
+      summary: Read server-owned dashboard metrics for a bounded local date range.
+      description: Metrics are derived only from the authenticated owner's non-deleted source records and explicit recommendation feedback. Currency totals are always returned separately.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: Exclusive upper boundary.
+          schema:
+            type: string
+            format: date
+        - name: groupBy
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DAY, WEEK, MONTH]
+            default: DAY
+        - name: timeZone
+          in: query
+          required: false
+          description: Optional IANA timezone. Defaults to the authenticated user's profile timezone.
+          schema:
+            type: string
+            example: Asia/Singapore
+      responses:
+        '200':
+          description: Presentation-neutral metrics with explicit empty-state metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /weekly-recaps/{weekStart}:
+    get:
+      tags:
+        - Analytics
+      summary: Read a concise owner-local weekly recap.
+      description: weekStart must be a Monday in the authenticated user's profile timezone. No cross-currency total is calculated.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: weekStart
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2026-07-27'
+      responses:
+        '200':
+          description: Weekly recap or explicit empty projection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklyRecapResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /chat/sessions:
+    post:
+      tags:
+        - Chat
+      summary: Create an owner-scoped Chat session.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChatSessionRequest'
+      responses:
+        '201':
+          description: Created Chat session.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags:
+        - Chat
+      summary: List active owner-scoped Chat sessions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Active Chat sessions.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /chat/sessions/{sessionId}:
+    get:
+      tags:
+        - Chat
+      summary: Read an owner-scoped Chat session.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Chat session.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Chat
+      summary: Archive an owner-scoped Chat session.
+      description: Archive is a status transition; messages and references are retained.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Chat session archived.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /chat/sessions/{sessionId}/references:
+    post:
+      tags:
+        - Chat
+      summary: Share one authorised FoodMind source into Chat.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareChatReferenceRequest'
+      responses:
+        '201':
+          description: Shared Chat reference.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatReferenceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /chat/sessions/{sessionId}/messages:
+    post:
+      tags:
+        - Chat
+      summary: Send a bounded user message and persist a grounded assistant result.
+      description: The Backend commits the user message before Agent invocation and re-authorises cited sources before storing assistant grounding links.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostChatMessageRequest'
+      responses:
+        '201':
+          description: Assistant message result.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Chat route is unsupported by the bounded Chat workflow.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    get:
+      tags:
+        - Chat
+      summary: Page through owner-scoped Chat messages in stable order.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Chat message page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessagePageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cooking-plans/generate:
+    post:
+      tags:
+        - Cooking Plans
+      summary: Generate a controlled cooking plan.
+      description: Requires Idempotency-Key. The backend persists the request, resolves hard dietary/allergy rules, sends only active controlled recipe candidates to the Cooking Agent outside a database transaction, validates the structured result, and stores an immutable output snapshot.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCookingPlanRequest'
+      responses:
+        '201':
+          description: Cooking plan created or resolved from a matching idempotent retry.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}:
+    get:
+      tags:
+        - Cooking Plans
+      summary: Read an owned cooking plan.
+      description: Owner-only read returning immutable request and output snapshots.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Persisted cooking plan.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cooking-plans/history:
+    get:
+      tags:
+        - Cooking Plans
+      summary: List owned cooking plans.
+      description: Returns only the authenticated user's plans using bounded pagination and stable createdAt/id ordering.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Owned cooking plan page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /recommendations/generate:
+    post:
+      tags:
+        - Recommendations
+      summary: Generate deterministic fallback recommendations.
+      description: Requires Idempotency-Key. The backend resolves preferences, history, Want to Try, active-group evidence, and curated candidates; clients cannot submit raw evidence. Try another is a client-only reveal of the existing ordered items and has no server mutation endpoint.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRecommendationRequest'
+      responses:
+        '201':
+          description: Recommendation session created or resolved from a matching idempotent retry.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /recommendations/{sessionId}:
+    get:
+      tags:
+        - Recommendations
+      summary: Read an owned recommendation session.
+      description: Owner-only read returning the same stable ordered candidates that were persisted at generation time.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Persisted recommendation result.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /recommendations/{sessionId}/feedback:
+    post:
+      tags:
+        - Recommendations
+      summary: Submit immutable recommendation feedback.
+      description: Requires Idempotency-Key. Events are append-only; duplicate retries with the same key and payload return the original event. Passive non-selection is not a supported label.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationFeedbackRequest'
+      responses:
+        '201':
+          description: Feedback event created.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationFeedbackResponse'
+        '200':
+          description: Matching idempotent retry resolved to the original event.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationFeedbackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /recommendations/history:
+    get:
+      tags:
+        - Recommendations
+      summary: List owned recommendation sessions.
+      description: Returns only the authenticated user's sessions using bounded pagination and stable createdAt/id ordering.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Owned recommendation session page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /want-to-try:
+    post:
+      tags:
+        - Saved Search and Explore
+      summary: Save an authorised source to Want to Try.
+      description: Owner is derived from the JWT. The source is resolved and authorised before insert; duplicate active saves are idempotent.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveWantToTryRequest'
+      responses:
+        '201':
+          description: Saved reference.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WantToTryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags:
+        - Saved Search and Explore
+      summary: List the authenticated user's Want to Try rows.
+      description: Rows are owner-only. Each source is re-authorised live; revoked sources return sourceAvailable=false without leaking old content.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Owner saved references.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WantToTryPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /want-to-try/{id}:
+    delete:
+      tags:
+        - Saved Search and Explore
+      summary: Soft-delete an owned Want to Try row.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Saved row deleted or already absent for this owner.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /search:
+    get:
+      tags:
+        - Saved Search and Explore
+      summary: Search authorised platform content.
+      description: Calls the PostgreSQL authorised search function with bounded query text, allow-listed source types, and all-or-none cursor pagination.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: types
+          in: query
+          required: false
+          description: Comma-separated allow-list of FOOD_RECORD, FOOD_PRODUCT, PLACE.
+          schema:
+            type: string
+            example: PLACE,FOOD_PRODUCT
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: Compatibility parameter; cursor pagination requires 0.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Authorised search page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchPageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /explore:
+    get:
+      tags:
+        - Saved Search and Explore
+      summary: Compose permission-safe Explore content.
+      description: Returns only live group-authorised records and active curated product/place cards. No public feed or external lookup is performed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: types
+          in: query
+          required: false
+          description: Comma-separated allow-list of FOOD_RECORD, FOOD_PRODUCT, PLACE.
+          schema:
+            type: string
+        - name: topics
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: Compatibility parameter; cursor pagination requires 0.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Permission-safe Explore page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplorePageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a user and issue tokens.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered and session created.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            Set-Cookie:
+              description: Secure HttpOnly refresh cookie and CSRF companion cookie for web clients.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate with email and password.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Credentials accepted and session created.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            Set-Cookie:
+              description: Secure HttpOnly refresh cookie and CSRF companion cookie for web clients.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /drink-records:
+    post:
+      tags:
+        - Drink Records
+      summary: Create an owner-controlled drink record.
+      description: Owner is derived from the JWT. GROUP visibility requires active membership in the target active group.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDrinkRecordRequest'
+      responses:
+        '201':
+          description: Drink record created.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: Current optimistic-lock version.
+              schema:
+                type: string
+                example: '"0"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkRecordResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags:
+        - Drink Records
+      summary: List authorised drink history cards.
+      description: Returns owner records and authorised group records through one permission-scoped SQL predicate. Deleted records are excluded.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: placeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: visibility
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PRIVATE
+              - GROUP
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: minRating
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+        - name: maxRating
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Authorised drink history page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkRecordPageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /drink-records/{id}:
+    get:
+      tags:
+        - Drink Records
+      summary: Read an authorised drink record detail.
+      description: Uses a permission-scoped query and returns non-disclosing 404 when inaccessible.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Drink record detail.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: Current optimistic-lock version.
+              schema:
+                type: string
+                example: '"0"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkRecordResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Drink Records
+      summary: Update an owned drink record.
+      description: Requires If-Match with the current version. Non-owners receive non-disclosing 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            example: '"0"'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDrinkRecordRequest'
+      responses:
+        '200':
+          description: Updated drink record.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: New optimistic-lock version.
+              schema:
+                type: string
+                example: '"1"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkRecordResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Drink Records
+      summary: Soft-delete an owned drink record.
+      description: Repeated owner delete is idempotent. Deleted rows are excluded from normal queries.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Drink record deleted or already deleted for this owner.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /history:
+    get:
+      tags:
+        - History
+      summary: Query combined timezone-aware food and drink history.
+      description: Uses [from, to) range semantics. Date-only boundaries are interpreted in the resolved IANA timezone; week buckets start on Monday. Ranges over 366 days are rejected.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "2026-07-26"
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "2026-07-28"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - DAY
+              - WEEK
+              - MONTH
+            default: DAY
+        - name: types
+          in: query
+          required: false
+          description: Comma-separated source types.
+          schema:
+            type: string
+            example: FOOD,DRINK
+        - name: timeZone
+          in: query
+          required: false
+          schema:
+            type: string
+            example: Asia/Singapore
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: cuisineId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: placeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Presentation-neutral combined history.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /groups:
+    post:
+      tags:
+        - Groups
+      summary: Create a trusted group.
+      description: The authenticated creator becomes the active OWNER membership in the same transaction.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '201':
+          description: Group created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags:
+        - Groups
+      summary: List trusted groups for the authenticated active member.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Caller groups.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /groups/{groupId}:
+    get:
+      tags:
+        - Groups
+      summary: Read trusted group metadata.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Group metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Groups
+      summary: Update or archive a trusted group.
+      description: Owner-only. ARCHIVED stops future protected group-content authorization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupRequest'
+      responses:
+        '200':
+          description: Updated group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /groups/{groupId}/invitations:
+    post:
+      tags:
+        - Groups
+      summary: Create a group invitation.
+      description: Owner-only. The raw token is returned once; only its SHA-256 hash is persisted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: Invitation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupInvitationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /group-invitations/join:
+    post:
+      tags:
+        - Groups
+      summary: Join a trusted group with a raw invitation token.
+      description: Locks the invitation row and activates or reactivates the caller membership.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinGroupRequest'
+      responses:
+        '200':
+          description: Caller membership after join.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMemberResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /groups/join:
+    post:
+      tags:
+        - Groups
+      summary: Join a trusted group with a raw invitation token.
+      description: Compatibility alias for /group-invitations/join.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinGroupRequest'
+      responses:
+        '200':
+          description: Caller membership after join.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMemberResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /groups/{groupId}/members:
+    get:
+      tags:
+        - Groups
+      summary: List active group members.
+      description: Requires active membership and exposes only group-display profile fields.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Active members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupMemberResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /groups/{groupId}/members/{userId}:
+    delete:
+      tags:
+        - Groups
+      summary: Remove a member or leave the group.
+      description: Owners may remove members; users may remove themselves. The last active owner cannot disappear.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Membership ended.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /groups/{groupId}/feed:
+    get:
+      tags:
+        - Groups
+      summary: Read the authorised group feed.
+      description: Authorization is enforced in SQL with active membership and active group status. Cursor ordering is occurredAt desc, sourceType asc, sourceId desc.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Group feed page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupFeedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /groups/{groupId}/recommendation-shares:
+    post:
+      tags:
+        - Groups
+      summary: Share an owned recommendation candidate into a group.
+      description: Requires candidate ownership and active membership in the target active group.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareRecommendationRequest'
+      responses:
+        '201':
+          description: Recommendation candidate shared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRecommendationShareResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /catalogue/reference-data:
+    get:
+      tags:
+        - Catalogue
+      summary: Read controlled catalogue reference choices.
+      description: Returns stable cuisine, dietary-tag, allergen, meal-type, and place-type choices from the controlled catalogue.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Controlled catalogue reference choices.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogueReferenceDataResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /catalogue/meals/{id}:
+    get:
+      tags:
+        - Catalogue
+      summary: Read an active controlled meal.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 20000000-0000-4000-8000-000000000001
+      responses:
+        '200':
+          description: Active meal detail with active place-specific offerings.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogueMealResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /catalogue/places/{id}:
+    get:
+      tags:
+        - Catalogue
+      summary: Read an active controlled place.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 21000000-0000-4000-8000-000000000001
+      responses:
+        '200':
+          description: Active place detail with decision-support observations and active offerings.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CataloguePlaceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /catalogue/products/{id}:
+    get:
+      tags:
+        - Catalogue
+      summary: Read an active controlled food product.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 23000000-0000-4000-8000-000000000001
+      responses:
+        '200':
+          description: Active product detail with controlled dietary and allergen classifications.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogueProductResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Rotate a refresh session and issue a new access token.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Refresh token rotated.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            Set-Cookie:
+              description: Replacement refresh and CSRF cookies for web clients.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Revoke the supplied refresh session.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '204':
+          description: Refresh session revoked and auth cookies cleared.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            Set-Cookie:
+              description: Expired refresh and CSRF cookies.
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout-all:
+    post:
+      tags:
+        - Authentication
+      summary: Revoke every active refresh session for the authenticated user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '204':
+          description: Active refresh sessions revoked and auth cookies cleared.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            Set-Cookie:
+              description: Expired refresh and CSRF cookies.
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Read the authenticated user's profile.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Current authenticated user.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags:
+        - Users
+      summary: Update the authenticated user's mutable profile fields.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCurrentUserRequest'
+      responses:
+        '200':
+          description: Updated authenticated user.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/me/preferences:
+    get:
+      tags:
+        - User Preferences
+      summary: Read the authenticated user's preference aggregate.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Current authenticated user's preferences.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - User Preferences
+      summary: Replace the authenticated user's complete preference aggregate.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplacePreferencesRequest'
+      responses:
+        '200':
+          description: Replaced preference aggregate.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferencesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /food-records:
+    post:
+      tags:
+        - Food Records
+      summary: Create an owner-controlled food record.
+      description: Owner is derived from the JWT. GROUP visibility requires active membership in the target active group.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFoodRecordRequest'
+      responses:
+        '201':
+          description: Food record created.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: Current optimistic-lock version.
+              schema:
+                type: string
+                example: '"0"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecordResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags:
+        - Food Records
+      summary: List authorised food history cards.
+      description: Returns owner records and authorised group records through one permission-scoped SQL predicate. Deleted records are excluded.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: cuisineId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: mealId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: placeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: visibility
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PRIVATE
+              - GROUP
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: minRating
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+        - name: maxRating
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Authorised food history page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecordPageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /food-records/{id}:
+    get:
+      tags:
+        - Food Records
+      summary: Read an authorised food record detail.
+      description: Uses a permission-scoped query and returns non-disclosing 404 when inaccessible.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Food record detail.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: Current optimistic-lock version.
+              schema:
+                type: string
+                example: '"0"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecordResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Food Records
+      summary: Update an owned food record.
+      description: Requires If-Match with the current version. Non-owners receive non-disclosing 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            example: '"0"'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFoodRecordRequest'
+      responses:
+        '200':
+          description: Updated food record.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: New optimistic-lock version.
+              schema:
+                type: string
+                example: '"1"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecordResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Food Records
+      summary: Soft-delete an owned food record.
+      description: Repeated owner delete is idempotent. Deleted rows are excluded from normal queries.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Food record deleted or already deleted for this owner.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'

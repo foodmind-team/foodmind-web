@@ -36,9 +36,9 @@ Owns application-level composition:
 
 It must not become a storage location for feature logic.
 
-### `features`
+### `routes`
 
-Each feature owns:
+Each lazy route module owns:
 
 - Pages
 - Feature-specific components
@@ -47,7 +47,7 @@ Each feature owns:
 - Form schema adapters
 - Feature tests
 
-Feature folders should expose a deliberate public surface. Avoid deep imports into another feature.
+Route modules share only presentation-neutral components and stable `lib` adapters. They do not import another route module's internals.
 
 ### `components`
 
@@ -123,7 +123,7 @@ another returned candidate without silently starting a new recommendation sessio
 - The top-level mode switch contains **Eat out & delivery** and **Cooking**.
 - Recommendation mode is selected by default and owns the strongest call to action.
 - Persistent labeled navigation contains Home, Groups, Explore, Saved, and Me.
-- Groups is the shared decision workspace for membership, votes, group history, and sharing a result.
+- Groups is the shared decision workspace for membership, authorised history, and sharing a result. Polls and voting are not part of the current contract.
 - Explore uses an image-led post grid, but its data remains limited to authorised group-visible records and curated platform content.
 - Public/follower feeds, public internet restaurant search, ordering, and payment remain outside the MVP.
 - The Cooking mode reads manually supplied or backend-provided pantry context; it must not imply automatic inventory capture.
@@ -131,10 +131,18 @@ another returned candidate without silently starting a new recommendation sessio
 ## Chatbot UI
 
 - Chatbot is for authorised platform search, summary, comparison, and navigation.
+- Users ask in natural language; the backend selects and returns the supported route unless an advanced caller explicitly supplies one.
 - It does not become the UI entry point for recommendation or cooking.
 - Source references remain visible and navigable.
 - Inaccessible or removed references show a permission-safe unavailable state.
 - Unsupported answers must not be rendered as confirmed facts.
+
+## Record media UI
+
+- The client follows the backend-owned create, direct PUT, finalise, and delete lifecycle.
+- The object-storage request receives only the returned allow-listed headers and never the FoodMind bearer token.
+- A local object URL may preview the selected image before save; it is revoked when no longer needed and never persisted.
+- Saved records show attachment status only until the backend supplies an authorised read/download contract.
 
 ## Analytics UI
 

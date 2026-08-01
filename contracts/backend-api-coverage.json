@@ -1,0 +1,11 @@
+{
+  "directUsages": [
+    {
+      "method": "POST",
+      "path": "/auth/refresh",
+      "source": "src/lib/api/client.ts",
+      "reason": "Refresh bypasses the authenticated OpenAPI client to prevent recursive 401 handling."
+    }
+  ],
+  "exceptions": []
+}

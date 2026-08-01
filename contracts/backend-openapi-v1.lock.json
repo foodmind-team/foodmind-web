@@ -1,0 +1,9 @@
+{
+  "sourceRepository": "foodmind-backend",
+  "sourcePath": "src/main/resources/openapi/openapi.yaml",
+  "backendCommit": "7ea2b90c1451d689c59d4ea37d337b4552220f44",
+  "openapiInfoVersion": "v1",
+  "sha256": "faa5035c175c25ea91705bf09a2013534c80421ef6ad1ea375f91b815face064",
+  "generator": "openapi-typescript",
+  "generatedAt": "2026-07-31T12:59:45.368Z"
+}

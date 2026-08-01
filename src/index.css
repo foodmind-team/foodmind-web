@@ -1,3 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-forest: #113e2c;
+  --color-leaf: #287354;
+  --color-lime: #d9ef74;
+  --color-coral: #f17a5b;
+  --color-paper: #f7f9f4;
+  --color-surface: #ffffff;
+  --color-ink: #17241d;
+  --color-success: #237a52;
+  --color-warning: #a76216;
+  --color-danger: #b73d32;
+  --color-info: #2b6680;
+  --color-muted: #657269;
+}
+
 :root {
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -19,6 +36,11 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 body:has(.modal-backdrop) {
