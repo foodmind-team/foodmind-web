@@ -32,7 +32,16 @@ export function GroupsPage() {
       {groups.isLoading && <LoadingState label="Opening your trusted groups…" />}
       {groups.isError && <ErrorState error={groups.error} onRetry={() => void groups.refetch()} />}
       {groups.isSuccess && groups.data.length === 0 && <EmptyState title="Make the first decision together" message="Create a group or join one with a private invitation token." action={<button className="primary-action" type="button" onClick={() => setShowCreate(true)}>Create group</button>} />}
-      <section className="group-list-grid">{groups.data?.map((group, index) => <Link className={`group-list-card ${index % 2 ? 'sage' : 'coral'}`} to={`/groups/${group.id}`} key={group.id}><span className="group-list-icon"><Users size={20} /></span><p className="eyebrow">{sentenceCase(group.status)}</p><h2>{group.name}</h2><p>{group.description || 'A private FoodMind decision space.'}</p><span className="card-arrow"><ArrowRight size={17} /></span></Link>)}</section>
+      <section className="group-list-grid">
+        {groups.data?.map((group, index) =>
+            <Link className={`group-list-card ${index % 2 ? 'sage' : 'coral'}`} to={`/groups/${group.id}`} key={group.id}>
+              <span className="group-list-icon"><Users size={20} /></span>
+              <p className="eyebrow">{sentenceCase(group.status)}</p>
+              <h2>{group.name}</h2>
+              <p>{group.description || 'A private FoodMind decision space.'}</p>
+              <span className="card-arrow"><ArrowRight size={17} /></span>
+            </Link>)}
+      </section>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Bookmark, Compass, Heart, Search, ShieldCheck, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, Bookmark, Compass, ExternalLink, Heart, Search, ShieldCheck, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
@@ -36,6 +36,11 @@ function toneFor(id: string) {
   return ['dumpling', 'cafe', 'table', 'pantry'][[...id].reduce((total, character) => total + character.charCodeAt(0), 0) % 4]
 }
 
+function imageSource(reference?: string | null) {
+  if (!reference) return null
+  return /^(https?:\/\/|\/|data:image\/|blob:)/i.test(reference) ? reference : null
+}
+
 export function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialSearch = searchParams.get('q') || ''
@@ -65,6 +70,8 @@ export function ExplorePage() {
   const isSuccess = isSearching ? search.isSuccess : explore.isSuccess
   const hasNextPage = isSearching ? search.hasNextPage : explore.hasNextPage
   const isFetchingNextPage = isSearching ? search.isFetchingNextPage : explore.isFetchingNextPage
+  const selectedKey = searchParams.get('view')
+  const selectedItem = items.find((item) => `${item.sourceType}:${item.sourceId}` === selectedKey)
   const retry = () => isSearching ? search.refetch() : explore.refetch()
   const loadMore = () => isSearching ? search.fetchNextPage() : explore.fetchNextPage()
   const setFilter = (key: string, value: string) => {
@@ -74,26 +81,51 @@ export function ExplorePage() {
     setSearchParams(next)
   }
   const changeQuery = (value: string) => { setQuery(value); setFilter('q', value) }
+  const openPreview = (item: ExploreItem | SearchItem) => setFilter('view', `${item.sourceType}:${item.sourceId}`)
+  const closePreview = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.delete('view')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+
+  useEffect(() => {
+    if (!selectedItem) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closePreview()
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [closePreview, selectedItem])
 
   return (
-    <div className="page section-page">
-      <header className="section-page-heading explore-heading"><div><p className="eyebrow">Your trusted feed</p><h1>Explore what your circles and FoodMind know.</h1><p>Meals, places, and products from sources you can trust.</p></div></header>
+    <div className="page section-page explore-page">
+      <header className="explore-feed-heading"><div><p className="eyebrow">Authorised discovery</p><h1>Explore</h1></div><p>Meals, places, and products shared by your circles and the curated FoodMind catalogue.</p></header>
       <section className="explore-controls" aria-label="Explore controls">
         <label className="explore-search"><Search size={18} /><span className="sr-only">Search authorised FoodMind content</span><input autoFocus={searchParams.get('search') === 'true'} value={query} onChange={(event) => changeQuery(event.target.value)} placeholder="Search places, meals, or products" />{query && <button type="button" onClick={() => changeQuery('')} aria-label="Clear search">Clear</button>}</label>
-        <div className="topic-row" aria-label="Explore source filters">{[['', 'For you'], ['records', 'Group records'], ['products', 'Products'], ['places', 'Places']].map(([value, label]) => <button className={type === value ? 'active' : ''} type="button" onClick={() => setFilter('type', value)} key={label}>{label}</button>)}</div>
-        <div className="topic-row secondary-topics" aria-label="Explore topic filters">{['', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés'].map((value) => <button className={topic === value ? 'active' : ''} type="button" onClick={() => setFilter('topic', value)} key={value || 'all'}>{value || 'All topics'}</button>)}</div>
-        <div className="permission-note"><ShieldCheck size={16} /><span>Only content you are authorised to see appears here.</span></div>
+        <div className="explore-channel-row">
+          <div className="topic-row" aria-label="Explore source filters">{[['', 'For you'], ['records', 'Group records'], ['products', 'Products'], ['places', 'Places']].map(([value, label]) => <button className={type === value ? 'active' : ''} type="button" onClick={() => setFilter('type', value)} key={label}>{label}</button>)}</div>
+          <div className="topic-row secondary-topics" aria-label="Explore topic filters">{['', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés'].map((value) => <button className={topic === value ? 'active' : ''} type="button" onClick={() => setFilter('topic', value)} key={value || 'all'}>{value || 'All topics'}</button>)}</div>
+          <div className="permission-note"><ShieldCheck size={16} /><span>Only content you are authorised to see</span></div>
+        </div>
       </section>
       {isLoading && <LoadingState label={debouncedQuery ? 'Searching FoodMind…' : 'Gathering authorised ideas…'} />}
       {isError && <ErrorState error={error} onRetry={() => void retry()} />}
       {isSuccess && items.length === 0 && <EmptyState title={debouncedQuery ? 'No authorised matches' : 'Nothing to explore yet'} message={debouncedQuery ? 'Try a broader search or another source filter.' : 'Group-visible records and active curated content will appear here.'} />}
-      <section className="post-grid">{items.map((item) => <DiscoveryCard item={item} key={`${item.sourceType}-${item.sourceId}`} />)}</section>
+      <section className="post-grid">{items.map((item) => <DiscoveryCard item={item} onOpen={() => openPreview(item)} key={`${item.sourceType}-${item.sourceId}`} />)}</section>
       {hasNextPage && <button className="secondary-action load-more" type="button" disabled={isFetchingNextPage} onClick={() => void loadMore()}>{isFetchingNextPage ? 'Loading…' : 'Load more ideas'}</button>}
+      {selectedItem && <DiscoveryPreview item={selectedItem} onClose={closePreview} />}
     </div>
   )
 }
 
-function DiscoveryCard({ item }: { item: ExploreItem | SearchItem }) {
+function SaveDiscoveryButton({ item, className = '' }: { item: ExploreItem | SearchItem; className?: string }) {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const isExplore = item.sourceType === 'GROUP_RECORD' || item.sourceType === 'CURATED_PRODUCT' || item.sourceType === 'CURATED_PLACE'
@@ -101,23 +133,55 @@ function DiscoveryCard({ item }: { item: ExploreItem | SearchItem }) {
     mutationFn: async () => dataOrThrow(await api.POST('/want-to-try', { body: { sourceType: isExplore ? saveType(item.sourceType as ExploreItem['sourceType']) : item.sourceType as Schema<'WantToTrySourceType'>, sourceId: item.sourceId } })),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['saved'] }); showToast('Added to Want to Try.') },
   })
+  return <><button className={className} type="button" disabled={save.isPending} onClick={() => save.mutate()} aria-label={`Save ${item.title}`}><Heart size={16} /><span>{save.isPending ? 'Saving' : 'Save'}</span></button>{save.isError && <small className="inline-error">{errorMessage(save.error)}</small>}</>
+}
+
+function DiscoveryCard({ item, onOpen }: { item: ExploreItem | SearchItem; onOpen: () => void }) {
   const destination = destinationFor(item.sourceType, item.sourceId)
   const sourceLabel = sentenceCase(item.sourceType)
+  const image = imageSource(item.imageReference)
   return <article className="post-card">
-    <Link className={`post-visual ${toneFor(item.sourceId)}`} to={destination} aria-label={`Open ${item.title}`}>
-      <span className="post-tag">{sourceLabel}</span><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" />
-    </Link>
+    <button className={`post-visual ${toneFor(item.sourceId)}`} type="button" onClick={onOpen} aria-label={`Preview ${item.title}`}>
+      {image ? <img src={image} alt="" /> : <><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" /></>}
+      <span className="post-tag">{sourceLabel}</span>
+    </button>
     <div className="post-copy">
       <p className="eyebrow">{item.occurredAt ? formatDateTime(item.occurredAt) : sentenceCase(item.visibility)}</p>
-      <Link className="post-title-link" to={destination}><h2>{item.title}</h2></Link>
+      <button className="post-title-button" type="button" onClick={onOpen}><h2>{item.title}</h2></button>
       {(item.subtitle || item.snippet) && <p className="post-snippet">{item.subtitle || item.snippet}</p>}
       <div className="post-meta">
         <Link className="post-author" to={destination}><span>{sourceLabel.slice(0, 1)}</span>{sourceLabel}<ArrowRight size={13} /></Link>
-        <button type="button" disabled={save.isPending} onClick={() => save.mutate()} aria-label={`Save ${item.title}`}><Heart size={16} /><span>{save.isPending ? 'Saving' : 'Save'}</span></button>
+        <SaveDiscoveryButton item={item} />
       </div>
-      {save.isError && <small className="inline-error">{errorMessage(save.error)}</small>}
     </div>
   </article>
+}
+
+function DiscoveryPreview({ item, onClose }: { item: ExploreItem | SearchItem; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement | null>(null)
+  const destination = destinationFor(item.sourceType, item.sourceId)
+  const sourceLabel = sentenceCase(item.sourceType)
+  const image = imageSource(item.imageReference)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog || dialog.open) return
+    if (typeof dialog.showModal === 'function') dialog.showModal()
+    else dialog.setAttribute('open', '')
+    return () => { if (dialog.open && typeof dialog.close === 'function') dialog.close() }
+  }, [])
+  return <dialog ref={dialogRef} className="discovery-overlay" aria-labelledby="discovery-dialog-title" onCancel={(event) => { event.preventDefault(); onClose() }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="discovery-dialog">
+      <button className="discovery-close" type="button" aria-label="Close preview" autoFocus onClick={onClose}><X size={21} /></button>
+      <div className={`discovery-dialog-visual ${toneFor(item.sourceId)}`}>
+        {image ? <img src={image} alt="" /> : <><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" /><span className="discovery-visual-label">{sourceLabel}</span></>}
+      </div>
+      <div className="discovery-dialog-copy">
+        <div className="discovery-source"><span>{sourceLabel.slice(0, 1)}</span><div><strong>{sourceLabel}</strong><small>{sentenceCase(item.visibility)} source</small></div></div>
+        <div className="discovery-dialog-body"><p className="eyebrow">{item.occurredAt ? formatDateTime(item.occurredAt) : 'FoodMind catalogue'}</p><h2 id="discovery-dialog-title">{item.title}</h2>{item.subtitle && <p className="discovery-subtitle">{item.subtitle}</p>}{item.snippet && <p className="discovery-snippet">{item.snippet}</p>}<div className="permission-note"><ShieldCheck size={16} /><span>Availability and permissions are rechecked when you open the source.</span></div></div>
+        <div className="discovery-dialog-actions"><SaveDiscoveryButton item={item} className="secondary-action" /><Link className="primary-action" to={destination}>Open full details <ExternalLink size={16} /></Link></div>
+      </div>
+    </section>
+  </dialog>
 }
 
 export function SavedPage() {

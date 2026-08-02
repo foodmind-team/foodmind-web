@@ -72,7 +72,7 @@ test('all primary destinations render their documented empty or ready state', as
     ['/records/food', /^food records$/i],
     ['/records/drink', /^drink records$/i],
     ['/groups', /^your groups$/i],
-    ['/explore', /explore what your circles/i],
+    ['/explore', /^explore$/i],
     ['/saved', /saved for the right moment/i],
     ['/cooking', /cook with what you know/i],
     ['/chat', /ask foodmind/i],
@@ -139,7 +139,7 @@ test('chatbot lets the backend route natural language and returns the grounded r
   let messageBody: Record<string, unknown> = {}
   await mockApi(page, { onChatMessage: (request) => { messageBody = request.postDataJSON() as Record<string, unknown> } })
   await page.goto(`/chat/${chatSession.id}`)
-  await page.getByLabel('Message').fill('Summarise my recent favourites')
+  await page.getByLabel('Message', { exact: true }).fill('Summarise my recent favourites')
   await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText(/recent favourites are grounded/i)).toBeVisible()
   expect(messageBody).toEqual({ content: 'Summarise my recent favourites' })

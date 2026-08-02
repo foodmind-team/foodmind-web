@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, BarChart3, CalendarDays, Check, Clock3, History, LogOut, MessageCircle, Settings2, Shield, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../app/providers/AuthProvider'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
@@ -17,13 +17,17 @@ function currentMonday() {
   return date.toISOString().slice(0, 10)
 }
 
+const PROFILE_TABS = [['overview', 'Overview'], ['activity', 'Activity'], ['account', 'Account']] as const
+
 export function ProfilePage() {
   const { user, logout, refreshUser } = useAuth()
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const [editing, setEditing] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [displayName, setDisplayName] = useState(user?.displayName || '')
   const [timeZone, setTimeZone] = useState(user?.timeZone || '')
+  const activeTab = searchParams.get('tab') === 'activity' ? 'activity' : searchParams.get('tab') === 'account' ? 'account' : 'overview'
   const recommendations = useQuery({ queryKey: queryKeys.recommendations.history(), queryFn: async () => dataOrThrow<Schema<'RecommendationHistoryResponse'>>(await api.GET('/recommendations/history', { params: { query: { page: 0, size: 5 } } })) })
   const recommendationItems = (recommendations.data?.items || []) as Schema<'RecommendationSessionSummary'>[]
   const update = useMutation({
@@ -31,20 +35,22 @@ export function ProfilePage() {
     onSuccess: async (updated) => { queryClient.setQueryData(queryKeys.users.me(), updated); await refreshUser(); setEditing(false); showToast('Profile updated.') },
   })
   return (
-    <div className="page section-page">
-      <header className="profile-heading"><span className="profile-avatar">{(user?.displayName || 'F').slice(0, 1).toUpperCase()}</span><div><p className="eyebrow">Your FoodMind account</p><h1>{user?.displayName}</h1><p>{user?.email} · {user?.timeZone}</p></div><button className="secondary-action" type="button" onClick={() => { setDisplayName(user?.displayName || ''); setTimeZone(user?.timeZone || ''); setEditing(true) }}><UserRound size={17} /> Edit profile</button></header>
+    <div className="page section-page profile-page">
+      <header className="profile-showcase"><span className="profile-avatar">{(user?.displayName || 'F').slice(0, 1).toUpperCase()}</span><div className="profile-identity"><p className="eyebrow">Your FoodMind account</p><h1>{user?.displayName}</h1><p className="profile-handle">{user?.email}</p><p className="profile-bio">Your private space for food decisions, memories, trusted circles, and grounded guidance.</p><div className="profile-stats"><span><strong>{recommendations.data?.totalItems ?? recommendationItems.length}</strong> recommendation sessions</span><span><strong>5</strong> FoodMind tools</span><span><strong>{user?.timeZone || 'Local'}</strong> time zone</span></div></div><button className="secondary-action" type="button" onClick={() => { setDisplayName(user?.displayName || ''); setTimeZone(user?.timeZone || ''); setEditing(true) }}><UserRound size={17} /> Edit profile</button></header>
       {editing && <section className="drawer-card"><p className="eyebrow">Profile details</p><h2>How FoodMind addresses you</h2><div className="form-grid"><label>Display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><label>Time zone<input value={timeZone} onChange={(event) => setTimeZone(event.target.value)} /></label></div>{update.isError && <div className="form-alert">{errorMessage(update.error)}</div>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-action" type="button" disabled={!displayName.trim() || !timeZone.trim() || update.isPending} onClick={() => update.mutate()}>Save profile</button></div></section>}
-      <section className="profile-destinations">
+      <nav className="profile-tabs" aria-label="Profile sections">{PROFILE_TABS.map(([value, label]) => <button className={activeTab === value ? 'active' : ''} type="button" aria-current={activeTab === value ? 'page' : undefined} onClick={() => { const next = new URLSearchParams(searchParams); if (value === 'overview') next.delete('tab'); else next.set('tab', value); setSearchParams(next) }} key={value}>{label}</button>)}</nav>
+
+      {activeTab === 'overview' && <section className="profile-tab-panel"><div className="profile-destinations">
         <ProfileLink to="/me/preferences" icon={Settings2} label="Preferences" detail="Budgets, cuisines, dietary rules, allergens, and location context" />
         <ProfileLink to="/history" icon={History} label="History" detail="Food and drink records in one timeline" />
         <ProfileLink to="/dashboard" icon={BarChart3} label="Dashboard" detail="Accessible backend-owned metrics and tables" />
         <ProfileLink to={`/weekly-recaps/${currentMonday()}`} icon={CalendarDays} label="Weekly recap" detail="The exact current backend week-start projection" />
         <ProfileLink to="/chat" icon={MessageCircle} label="Ask FoodMind" detail="Grounded search, summary, compare, and navigation" />
-      </section>
-      <div className="profile-grid">
-        <section className="profile-card"><p className="eyebrow">Recent recommendation sessions</p><h2>Your latest decisions</h2>{recommendations.isLoading && <LoadingState label="Loading recommendation history…" />}{recommendations.isError && <ErrorState error={recommendations.error} onRetry={() => void recommendations.refetch()} />}{recommendations.isSuccess && !recommendationItems.length && <EmptyState title="No recommendations yet" message="Generate your first recommendation from Home." />}{recommendationItems.map((item) => <Link className="history-row" to={`/recommendations/${item.sessionId}`} key={item.sessionId}><span><Clock3 size={17} /></span><div><strong>{sentenceCase(item.status)}</strong><small>{formatDateTime(item.createdAt)} · {item.returnedCandidateCount || 0} candidates</small></div><ArrowRight size={16} /></Link>)}</section>
-        <section className="profile-card security-card"><p className="eyebrow">Session controls</p><h2>Your account stays in your hands.</h2><p>Access tokens live only in memory. Signing out clears private client data and the server session cookie.</p><div className="session-actions"><button className="secondary-action" type="button" onClick={() => void logout(false)}><LogOut size={17} /> Sign out here</button><button className="text-button danger-link" type="button" onClick={() => void logout(true)}><Shield size={17} /> Sign out everywhere</button></div></section>
-      </div>
+      </div></section>}
+
+      {activeTab === 'activity' && <section className="profile-tab-panel profile-activity"><div className="profile-card"><p className="eyebrow">Recent recommendation sessions</p><h2>Your latest decisions</h2>{recommendations.isLoading && <LoadingState label="Loading recommendation history…" />}{recommendations.isError && <ErrorState error={recommendations.error} onRetry={() => void recommendations.refetch()} />}{recommendations.isSuccess && !recommendationItems.length && <EmptyState title="No recommendations yet" message="Generate your first recommendation from Home." />}{recommendationItems.map((item) => <Link className="history-row" to={`/recommendations/${item.sessionId}`} key={item.sessionId}><span><Clock3 size={17} /></span><div><strong>{sentenceCase(item.status)}</strong><small>{formatDateTime(item.createdAt)} · {item.returnedCandidateCount || 0} candidates</small></div><ArrowRight size={16} /></Link>)}</div></section>}
+
+      {activeTab === 'account' && <section className="profile-tab-panel"><div className="profile-card security-card"><p className="eyebrow">Session controls</p><h2>Your account stays in your hands.</h2><p>Access tokens live only in memory. Signing out clears private client data and the server session cookie.</p><div className="session-actions"><button className="secondary-action" type="button" onClick={() => void logout(false)}><LogOut size={17} /> Sign out here</button><button className="text-button danger-link" type="button" onClick={() => void logout(true)}><Shield size={17} /> Sign out everywhere</button></div></div></section>}
     </div>
   )
 }
