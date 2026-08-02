@@ -29,8 +29,8 @@ const primaryNavigation: NavigationItem[] = [
 ]
 
 const toolNavigation: NavigationItem[] = [
-  { to: '/chat', label: 'Ask FoodMind', icon: Bot },
-  { to: '/cooking', label: 'Cooking', icon: ChefHat },
+  // { to: '/chat', label: 'Ask FoodMind', icon: Bot },
+  // { to: '/cooking', label: 'Cooking', icon: ChefHat },
   { to: '/history', label: 'History', icon: Clock3 },
   { to: '/dashboard', label: 'Insights', icon: BarChart3 },
 ]
