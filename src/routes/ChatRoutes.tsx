@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { Archive, ArrowLeft, ArrowRight, Bot, Check, Link2, MessageCircle, Plus, Search, Send, Sparkles, UserRound, X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
+import { ErrorState, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
@@ -19,6 +19,18 @@ type StartChatInput = { title: string | null; draft?: string }
 
 function useChatSessions() {
   return useQuery({ queryKey: queryKeys.chat.sessions(), queryFn: async () => dataOrThrow<Schema<'ChatSessionPageResponse'>>(await api.GET('/chat/sessions', { params: { query: { page: 0, size: 50 } } })) })
+}
+
+function ChatSessionSidebar({ sessions, currentId, creating, onCreate }: { sessions: ReturnType<typeof useChatSessions>; currentId?: string; creating: boolean; onCreate: () => void }) {
+  return <aside className="chat-sidebar">
+    <div className="chat-sidebar-heading"><div><p className="eyebrow">Messages</p><h2>FoodMind Chat</h2></div><button className="icon-button" type="button" aria-label="Start a new chat" disabled={creating} onClick={onCreate}><Plus size={18} /></button></div>
+    <div className="chat-sidebar-list">
+      {sessions.isLoading && <LoadingState label="Loading conversations…" />}
+      {sessions.isError && <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} />}
+      {sessions.isSuccess && !sessions.data.items.length && <p className="chat-sidebar-empty">No conversations yet. Start with one of the prompts.</p>}
+      {sessions.data?.items.map((item) => <Link className={item.id === currentId ? 'active' : ''} to={`/chat/${item.id}`} key={item.id}><span className="chat-session-avatar"><MessageCircle size={17} /></span><span><strong>{item.title || 'Untitled conversation'}</strong><small>{formatDateTime(item.updatedAt)}</small></span><ArrowRight size={15} /></Link>)}
+    </div>
+  </aside>
 }
 
 export function ChatIndexPage() {
@@ -40,16 +52,18 @@ export function ChatIndexPage() {
   }
 
   return (
-    <div className="page section-page chat-index-page">
-      <header className="section-page-heading"><div><p className="eyebrow">Grounded FoodMind help</p><h1>Ask FoodMind</h1><p>Search, summarise, compare, or navigate the FoodMind content you are already authorised to use.</p></div><button className="primary-action" type="button" disabled={create.isPending} onClick={() => create.mutate({ title: null })}><Plus size={17} /> {create.isPending ? 'Opening…' : 'New chat'}</button></header>
-      <section className="chat-scope-note"><Sparkles size={18} /><div><strong>The chatbot stays grounded.</strong><p>It cannot generate recommendations, create cooking plans, search the public internet, or bypass source permissions.</p></div></section>
-
-      <section className="chat-starter-section" aria-labelledby="chat-starters-title"><div className="section-topline"><div><p className="eyebrow">Start with a task</p><h2 id="chat-starters-title">What would you like help with?</h2></div><button className="text-button" type="button" onClick={() => setNaming((shown) => !shown)} aria-expanded={naming}>{naming ? 'Close naming' : 'Name a chat'}</button></div><div className="chat-starter-grid">{CHAT_STARTERS.map((starter) => <button type="button" disabled={create.isPending} onClick={() => create.mutate({ title: starter.title, draft: starter.prompt })} key={starter.title}><span><MessageCircle size={18} /></span><strong>{starter.title}</strong><small>{starter.detail}</small><ArrowRight size={16} /></button>)}</div></section>
-
-      {naming && <section className="drawer-card compact-chat-create"><label>Conversation title<input value={title} maxLength={160} autoFocus onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Compare saved lunch options" onKeyDown={(event) => { if (event.key === 'Enter') startNamedChat() }} /></label><div className="form-actions"><button className="secondary-action" type="button" onClick={() => setNaming(false)}>Cancel</button><button className="primary-action" type="button" onClick={startNamedChat} disabled={!title.trim() || create.isPending}>Start named chat</button></div></section>}
-      {create.isError && <div className="form-alert" role="alert">{errorMessage(create.error)}</div>}
-
-      <section className="chat-history-section" aria-labelledby="chat-history-title"><div className="section-topline"><div><p className="eyebrow">Your conversations</p><h2 id="chat-history-title">Continue where you left off</h2></div></div>{sessions.isLoading && <LoadingState label="Loading your conversations…" />}{sessions.isError && <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} />}{sessions.isSuccess && !sessions.data.items.length && <EmptyState title="No conversations yet" message="Choose a task above or open a blank chat. Your grounded conversations will appear here." />}<div className="chat-session-grid">{sessions.data?.items.map((session) => <Link className="chat-session-card" to={`/chat/${session.id}`} key={session.id}><span><MessageCircle /></span><div><p className="eyebrow">{sentenceCase(session.status)}</p><h3>{session.title || 'Untitled conversation'}</h3><p>Updated {formatDateTime(session.updatedAt)}</p></div><ArrowRight size={17} /></Link>)}</div></section>
+    <div className="chat-layout chat-index-workspace page">
+      <ChatSessionSidebar sessions={sessions} creating={create.isPending} onCreate={() => create.mutate({ title: null })} />
+      <section className="conversation-panel chat-landing-panel">
+        <header className="conversation-header"><div><p className="eyebrow">Grounded FoodMind help</p><h1>Ask FoodMind</h1></div><button className="secondary-action" type="button" onClick={() => setNaming((shown) => !shown)} aria-expanded={naming}>{naming ? 'Close naming' : 'Name a chat'}</button></header>
+        <div className="chat-landing-content">
+          <span className="chat-landing-mark"><Sparkles size={25} /></span><h2>What would you like help with?</h2><p>Search, summarise, compare, or navigate the FoodMind content you are already authorised to use.</p>
+          <div className="chat-landing-scope"><Check size={18} /><span><strong>Permission-aware by design</strong><small>No public internet search, invented recommendations, or permission bypasses.</small></span></div>
+          <div className="chat-starter-grid">{CHAT_STARTERS.map((starter) => <button type="button" disabled={create.isPending} onClick={() => create.mutate({ title: starter.title, draft: starter.prompt })} key={starter.title}><span><MessageCircle size={18} /></span><strong>{starter.title}</strong><small>{starter.detail}</small><ArrowRight size={16} /></button>)}</div>
+          {naming && <section className="drawer-card compact-chat-create"><label>Conversation title<input value={title} maxLength={160} autoFocus onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Compare saved lunch options" onKeyDown={(event) => { if (event.key === 'Enter') startNamedChat() }} /></label><div className="form-actions"><button className="secondary-action" type="button" onClick={() => setNaming(false)}>Cancel</button><button className="primary-action" type="button" onClick={startNamedChat} disabled={!title.trim() || create.isPending}>Start named chat</button></div></section>}
+          {create.isError && <div className="form-alert" role="alert">{errorMessage(create.error)}</div>}
+        </div>
+      </section>
     </div>
   )
 }
@@ -140,7 +154,7 @@ export function ChatConversationPage() {
   if (session.isError) return <div className="page"><ErrorState error={session.error} onRetry={() => void session.refetch()} /></div>
   return (
     <div className="chat-layout page">
-      <aside className="chat-sidebar"><div className="section-topline"><div><p className="eyebrow">Conversations</p><h2>FoodMind Chat</h2></div><button className="icon-button" type="button" aria-label="Start a new chat" disabled={create.isPending} onClick={() => create.mutate()}><Plus size={18} /></button></div><div className="chat-sidebar-list">{sessions.data?.items.map((item) => <Link className={item.id === sessionId ? 'active' : ''} to={`/chat/${item.id}`} key={item.id}><strong>{item.title || 'Untitled conversation'}</strong><small>{formatDateTime(item.updatedAt)}</small></Link>)}</div></aside>
+      <ChatSessionSidebar sessions={sessions} currentId={sessionId} creating={create.isPending} onCreate={() => create.mutate()} />
       <section className="conversation-panel"><header className="conversation-header"><div><Link className="mobile-chat-back" to="/chat"><ArrowLeft size={16} /> Chats</Link><p className="eyebrow">Grounded conversation</p><h1>{session.data?.title || 'Untitled conversation'}</h1></div><button className="icon-button" type="button" aria-label="Archive this conversation" disabled={archive.isPending} onClick={() => setConfirmingArchive(true)}><Archive size={18} /></button></header>
         <div className="route-guide" aria-label="Supported chatbot capabilities"><strong>FoodMind chooses the right path:</strong><span>Search</span><span>Summary</span><span>Compare</span><span>Navigation</span></div>
         {confirmingArchive && <div className="chat-confirm" role="alert"><div><strong>Archive this conversation?</strong><p>It will leave your active chat list, while its messages and references remain retained by the backend.</p>{archive.isError && <span className="inline-error">{errorMessage(archive.error)}</span>}</div><button className="secondary-action" type="button" onClick={() => setConfirmingArchive(false)}>Cancel</button><button className="primary-action danger" type="button" disabled={archive.isPending} onClick={() => archive.mutate()}>Archive</button></div>}
