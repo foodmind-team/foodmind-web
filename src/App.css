@@ -1285,14 +1285,14 @@ main {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: white;
+  background: #d9ef74;
   padding: 23px;
 }
 
 .group-list-card.coral {
   background:
     radial-gradient(circle at 100% 0, rgba(241, 122, 91, 0.23), transparent 36%),
-    white;
+    #d9ef74;
 }
 
 .group-list-card.sage {
@@ -1315,6 +1315,7 @@ main {
 .group-list-card h2 {
   margin: 0;
   font-size: 20px;
+  color: #0c0f0c;
 }
 
 .group-list-card > p:not(.eyebrow) {
@@ -2918,6 +2919,7 @@ legend {
   position: absolute;
   right: 20px;
   bottom: 20px;
+  color: black;
 }
 
 .compact-feature {
