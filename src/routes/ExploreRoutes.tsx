@@ -3,6 +3,7 @@ import { ArrowRight, Bookmark, Compass, ExternalLink, Heart, Search, ShieldCheck
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
+import { SavedSectionTabs } from '../components/saved/SavedSectionTabs'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
@@ -198,6 +199,7 @@ export function SavedPage() {
   return (
     <div className="page section-page">
       <header className="section-page-heading"><div><p className="eyebrow">Want to Try</p><h1>Saved for the right moment.</h1><p>Your backend-owned shortlist of meals, places, products, and trusted records.</p></div><Link className="primary-action" to="/explore"><Compass size={17} /> Explore ideas</Link></header>
+      <SavedSectionTabs />
       {saved.isLoading && <LoadingState label="Opening your shortlist…" />}
       {saved.isError && <ErrorState error={saved.error} onRetry={() => void saved.refetch()} />}
       {saved.isSuccess && !savedItems.length && <EmptyState title="Your shortlist is open" message="Save an authorised idea from Explore or a recommendation and it will stay here." action={<Link className="primary-action" to="/explore">Explore ideas</Link>} />}

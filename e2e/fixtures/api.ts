@@ -23,6 +23,14 @@ const foodRecord = { id: id('31'), mealNameSnapshot: 'Hainanese chicken rice', p
 const drinkRecord = { id: id('32'), drinkName: 'Iced matcha latte', shopNameSnapshot: 'Orchard Tea Bar', occurredAt: '2026-07-29T07:15:00Z', price: { amount: 5.8, currency: 'SGD' }, rating: 4, comment: null, sweetnessLevel: 2, iceLevel: 1, wouldBuyAgain: true, visibility: 'PRIVATE', groupId: null, mediaAssetId: null, createdAt: now, updatedAt: now, version: 1 }
 export const chatSession = { id: id('41'), title: 'Food history helper', status: 'ACTIVE', createdAt: now, updatedAt: now }
 const chatAssistant = { id: id('42'), sessionId: chatSession.id, role: 'ASSISTANT', content: 'Your recent favourites are grounded in the FoodMind sources shown below.', route: 'SUMMARY', responseStatus: 'SUCCEEDED', correlationId: id('43'), agentTraceId: 'agent-e2e', createdAt: now, sources: [] }
+export const cookingPlan = {
+  planId: id('61'), traceId: 'trace-cooking-e2e', status: 'SUCCEEDED', sourceRecipeId: null,
+  fallbackStatus: 'NOT_REQUIRED', fallbackVersion: null, failureCode: null, createdAt: now, completedAt: now,
+  inputs: [{ ingredientName: 'firm tofu', quantity: 300, unit: 'g', source: 'MANUAL' }],
+  ingredients: [{ sequenceNo: 1, ingredientName: 'firm tofu', quantity: 300, unit: 'g', availability: 'AVAILABLE' }],
+  steps: [{ stepNo: 1, instruction: 'Sear the tofu until golden.' }, { stepNo: 2, instruction: 'Toss with the cooked noodles.' }],
+  warnings: [],
+}
 const mediaAssetId = id('51')
 const metrics = [
   { code: 'FOOD_COUNT', label: 'Food records', period: '2026-07-13', value: 5, unit: 'COUNT', empty: false },
@@ -54,6 +62,7 @@ type MockOptions = {
   onGroupUpdate?: (request: PlaywrightRequest) => void
   onLegacyJoin?: (request: PlaywrightRequest) => void
   onChatMessage?: (request: PlaywrightRequest) => void
+  onCookingGenerate?: (request: PlaywrightRequest) => void
   onMediaDeclaration?: (request: PlaywrightRequest) => void
   onMediaStorage?: (request: PlaywrightRequest) => void
   onRecordCreate?: (request: PlaywrightRequest) => void
@@ -109,6 +118,8 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === '/search' && method === 'GET') return fulfill(route, { items: [], nextCursor: null, page: 0, size: 18, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/want-to-try' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 24, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/cooking-plans/history' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 8, totalElements: 0, totalPages: 0, hasNext: false })
+    if (path === '/cooking-plans/generate' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, cookingPlan) }
+    if (path === `/cooking-plans/${cookingPlan.planId}` && method === 'GET') return fulfill(route, cookingPlan)
     if (path === '/chat/sessions' && method === 'GET') return fulfill(route, { items: [chatSession], page: 0, size: 50, totalElements: 1, totalPages: 1, hasNext: false })
     if (path === '/chat/sessions' && method === 'POST') return fulfill(route, { ...chatSession, title: request.postDataJSON().title }, 201)
     if (path === `/chat/sessions/${chatSession.id}` && method === 'GET') return fulfill(route, chatSession)
