@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { resolve } from 'node:path'
-import { chatSession, group, mockApi, recommendation } from '../fixtures/api.js'
+import { chatSession, cookingPlan, group, mockApi, recommendation } from '../fixtures/api.js'
 
 test('returns a direct protected route to sign-in without an authenticated refresh', async ({ page }) => {
   await mockApi(page, { authenticated: false })
@@ -49,6 +49,8 @@ test('core home is responsive and has no serious automated accessibility finding
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
     expect(overflow).toBe(false)
     if (viewport.width === 360) {
+      await expect(page.getByRole('navigation', { name: /primary/i }).getByRole('link')).toHaveCount(5)
+      await expect(page.getByRole('link', { name: /add a food or drink record/i })).toBeVisible()
       const generate = await page.getByRole('button', { name: /generate recommendation/i }).boundingBox()
       expect(generate).not.toBeNull()
       expect((generate?.y || 0) + (generate?.height || 0)).toBeLessThanOrEqual(viewport.height)
@@ -74,7 +76,9 @@ test('all primary destinations render their documented empty or ready state', as
     ['/groups', /^your groups$/i],
     ['/explore', /^explore$/i],
     ['/saved', /saved for the right moment/i],
+    ['/saved/recipes', /recipes you can actually cook/i],
     ['/cooking', /cook with what you know/i],
+    ['/cooking/recipes', /choose what you want to cook/i],
     ['/chat', /ask foodmind/i],
     ['/dashboard', /^dashboard$/i],
     ['/me', /^maya tan$/i],
@@ -94,6 +98,29 @@ test('all primary destinations render their documented empty or ready state', as
     })
     expect(serious).toEqual([])
   }
+})
+
+test('local recipe selection generates a real backend plan and tracks session progress', async ({ page }) => {
+  let generateBody: Record<string, unknown> = {}
+  let idempotencyKey = ''
+  await mockApi(page, { onCookingGenerate: (request) => {
+    generateBody = request.postDataJSON() as Record<string, unknown>
+    idempotencyKey = request.headers()['idempotency-key'] || ''
+  } })
+  await page.goto('/cooking/recipes')
+  await page.getByRole('button', { name: /ginger scallion tofu noodles/i }).click()
+  const selectionDock = page.getByRole('region', { name: /selected recipes and plan constraints/i })
+  await expect(selectionDock.getByText('1', { exact: true })).toBeVisible()
+  await expect(selectionDock.getByText('recipe selected', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /generate plan/i }).click()
+
+  await expect(page).toHaveURL(`/cooking/${cookingPlan.planId}`)
+  expect(generateBody).toMatchObject({ servings: 2 })
+  expect((generateBody.ingredients as unknown[]).length).toBeGreaterThan(0)
+  expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/)
+  await page.getByRole('button', { name: /mark complete: step 1/i }).click()
+  await expect(page.getByText('1 of 2 steps complete')).toBeVisible()
+  await expect(page.getByRole('progressbar', { name: /cooking plan completion/i })).toHaveAttribute('aria-valuenow', '1')
 })
 
 test('record collection filters and global search intent stay in the URL', async ({ page }) => {
