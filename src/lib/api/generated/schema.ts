@@ -555,41 +555,7 @@ export interface paths {
          * Generate a controlled cooking plan.
          * @description Requires Idempotency-Key. The backend persists the request, resolves hard dietary/allergy rules, sends only active controlled recipe candidates to the Cooking Agent outside a database transaction, validates the structured result, and stores an immutable output snapshot.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /**
-                     * @description Optional client-generated correlation identifier.
-                     * @example postman-correlation-test
-                     */
-                    "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
-                    "Idempotency-Key": string;
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["GenerateCookingPlanRequest"];
-                };
-            };
-            responses: {
-                /** @description Cooking plan created or resolved from a matching idempotent retry. */
-                201: {
-                    headers: {
-                        "X-Correlation-ID": components["headers"]["CorrelationId"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CookingPlanResponse"];
-                    };
-                };
-                400: components["responses"]["BadRequest"];
-                401: components["responses"]["Unauthorized"];
-                409: components["responses"]["Conflict"];
-            };
-        };
+        post: operations["generateCookingPlan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -607,39 +573,29 @@ export interface paths {
          * Read an owned cooking plan.
          * @description Owner-only read returning immutable request and output snapshots.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Optional client-generated correlation identifier.
-                     * @example postman-correlation-test
-                     */
-                    "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
-                };
-                path: {
-                    planId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Persisted cooking plan. */
-                200: {
-                    headers: {
-                        "X-Correlation-ID": components["headers"]["CorrelationId"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CookingPlanResponse"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getCookingPlan"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/{planId}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit decisions for a NEEDS_CONFIRMATION plan.
+         * @description Validates the answers against the presented confirmation questions, guards the plan revision (409 when the plan is not awaiting confirmation), and re-runs the agent to produce a new revision plan.
+         */
+        post: operations["submitCookingPlanDecisions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -657,42 +613,110 @@ export interface paths {
          * List owned cooking plans.
          * @description Returns only the authenticated user's plans using bounded pagination and stable createdAt/id ordering.
          */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Zero-based page index. */
-                    page?: components["parameters"]["Page"];
-                    /** @description Bounded page size. */
-                    size?: components["parameters"]["Size"];
-                };
-                header?: {
-                    /**
-                     * @description Optional client-generated correlation identifier.
-                     * @example postman-correlation-test
-                     */
-                    "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Owned cooking plan page. */
-                200: {
-                    headers: {
-                        "X-Correlation-ID": components["headers"]["CorrelationId"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CookingPlanHistoryResponse"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-            };
-        };
+        get: operations["listCookingPlanHistory"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/generate-async": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit an async cooking-plan generation task.
+         * @description Requires Idempotency-Key. Accepts the same request as /generate and returns 202 with a task handle; the background coordinator polls the agent task and materialises the terminal plan. If the submission itself fails, a terminal FAILED plan is returned with 200.
+         */
+        post: operations["generateCookingPlanAsync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/{planId}/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the async task handle of an in-flight cooking plan.
+         * @description Returns 200 only while the plan is PROCESSING and a generation record exists; terminal plans return 404 (clients then poll GET /cooking-plans/{planId}).
+         */
+        get: operations["getCookingPlanTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/{planId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an in-flight async cooking-plan task.
+         * @description Cancels the agent task and materialises the plan as FAILED(TASK_CANCELLED). Conflicts (409) when the plan is not a PROCESSING async task.
+         */
+        post: operations["cancelCookingPlanTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated user's recipes. */
+        get: operations["listUserRecipes"];
+        put?: never;
+        /** Create an owned recipe. */
+        post: operations["createUserRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an owned recipe. */
+        get: operations["getUserRecipe"];
+        /**
+         * Update an owned recipe with optimistic locking.
+         * @description Requires If-Match with the current numeric version. Non-owners receive a non-disclosing 404.
+         */
+        put: operations["updateUserRecipe"];
+        post?: never;
+        /** Soft-delete an owned recipe. */
+        delete: operations["deleteUserRecipe"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3791,7 +3815,8 @@ export interface components {
             source: "MANUAL" | "AUTHORISED_PANTRY";
         };
         GenerateCookingPlanRequest: {
-            ingredients: components["schemas"]["CookingIngredientRequest"][];
+            ingredients?: components["schemas"]["CookingIngredientRequest"][];
+            recipeIds?: string[];
             /** @example 2 */
             servings: number;
             /** @example 60 */
@@ -3812,65 +3837,162 @@ export interface components {
              *     ]
              */
             avoidAllergenCodes?: string[];
-        };
-        CookingPlanInputResponse: {
-            ingredientName?: string;
-            quantity?: number | null;
-            unit?: string | null;
-            /** @enum {string} */
-            source?: "MANUAL" | "AUTHORISED_PANTRY";
-        };
-        CookingPlanIngredientResponse: {
-            sequenceNo?: number;
-            ingredientName?: string;
-            quantity?: number | null;
-            unit?: string | null;
-            /** @enum {string} */
-            availability?: "AVAILABLE" | "TO_BUY";
-        };
-        CookingPlanStepResponse: {
-            stepNo?: number;
-            instruction?: string;
-        };
-        CookingPlanWarningResponse: {
-            sequenceNo?: number;
-            /** @example BUDGET_ESTIMATE_ONLY */
-            warningCode?: string;
-            message?: string;
+            /**
+             * Format: date-time
+             * @example 2026-08-02T18:30:00+08:00
+             */
+            servingAt?: string | null;
+            /** @example SG */
+            region?: string | null;
         };
         CookingPlanResponse: {
             /** Format: uuid */
             planId: string;
-            traceId: string;
             /** @enum {string} */
-            status: "SUCCEEDED" | "FALLBACK_SUCCEEDED" | "NO_VALID_RECIPE" | "FAILED";
-            /** Format: uuid */
-            sourceRecipeId?: string | null;
-            /** @example cooking-agent-v1 */
-            agentContractVersion?: string | null;
-            /** @enum {string} */
-            fallbackStatus: "NOT_REQUIRED" | "SUCCEEDED" | "NO_VALID_RECIPE" | "FAILED";
-            /** @example cooking-fallback-v1 */
-            fallbackVersion?: string | null;
-            /** @example NO_RECIPE_MATCH */
-            failureCode?: string | null;
+            status: "PROCESSING" | "READY" | "NEEDS_CONFIRMATION" | "INFEASIBLE" | "FAILED";
+            /** @example 3f4a…:v1 */
+            planRevision?: string | null;
+            /** @example SG */
+            region?: string | null;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             completedAt?: string | null;
-            inputs: components["schemas"]["CookingPlanInputResponse"][];
-            ingredients: components["schemas"]["CookingPlanIngredientResponse"][];
-            steps: components["schemas"]["CookingPlanStepResponse"][];
-            warnings: components["schemas"]["CookingPlanWarningResponse"][];
+            /** @example OPTIMAL */
+            solverStatus?: string | null;
+            /** @example 54 */
+            makespanMinutes?: number | null;
+            /** @example SCHEDULE_UNKNOWN */
+            errorCode?: string | null;
+            errorMessage?: string | null;
+            sources?: components["schemas"]["CookingPlanSource"][];
+            timeline?: components["schemas"]["CookingPlanTimelineTask"][];
+            miseEnPlace?: components["schemas"]["CookingPlanMiseEnPlaceItem"][];
+            dishCompletions?: components["schemas"]["CookingPlanDishCompletion"][];
+            completionChecklist?: components["schemas"]["CookingPlanCompletionItem"][];
+            assumptions?: components["schemas"]["CookingPlanAssumption"][];
+            repairOptions?: components["schemas"]["CookingPlanRepairOption"][];
+            questions?: string[];
+            confirmationQuestions?: components["schemas"]["CookingPlanConfirmationQuestion"][];
+            decisions?: components["schemas"]["CookingPlanDecision"][];
+            reasons?: string[];
+            safeAlternatives?: string[];
+            safetyPolicy?: components["schemas"]["CookingPlanSafetyPolicy"] | null;
+            explanation?: string | null;
+            /** @example deterministic */
+            explanationSource?: string | null;
+        };
+        CookingPlanSource: {
+            sequenceNo?: number;
+            /** @enum {string} */
+            sourceType?: "CATALOGUE" | "OWNER";
+            /** Format: uuid */
+            sourceId?: string | null;
+            targetServings?: number;
+            dishName?: string | null;
+        };
+        CookingPlanTimelineTask: {
+            taskId?: string;
+            startMinute?: number;
+            endMinute?: number;
+            durationMinutes?: number;
+            instruction?: string;
+            dishId?: string;
+            /** @enum {string} */
+            workMode?: "ACTIVE" | "PASSIVE";
+            category?: string;
+            /** @enum {string|null} */
+            heatLevel?: "LOW" | "MEDIUM" | "HIGH" | "NONE" | null;
+            resources?: string[];
+        };
+        CookingPlanMiseEnPlaceItem: {
+            sequenceNo?: number;
+            instruction?: string;
+            ingredient?: string | null;
+            operation?: string | null;
+            durationMinutes?: number | null;
+            resources?: string[];
+            whenNeeded?: string | null;
+        };
+        CookingPlanDishCompletion: {
+            dishId?: string;
+            completionMinute?: number;
+            taskCount?: number;
+            isShared?: boolean;
+        };
+        CookingPlanCompletionItem: {
+            completionItemId?: string;
+            ingredientName?: string;
+            recipeIds?: string[];
+            allocations?: components["schemas"]["CookingPlanLotAllocation"][];
+        };
+        CookingPlanLotAllocation: {
+            inventoryLotId?: string;
+            quantity?: number;
+            unit?: string;
+        };
+        CookingPlanAssumption: {
+            text?: string;
+            confidence?: number;
+            sourceType?: string | null;
+            evidenceUrl?: string | null;
+        };
+        CookingPlanRepairOption: {
+            optionId?: string;
+            optionType?: string;
+            description?: string;
+            changes?: string[];
+            effects?: string[];
+            /** @example validated */
+            revalidationStatus?: string;
+        };
+        CookingPlanConfirmationQuestion: {
+            questionId?: string;
+            fieldPath?: string;
+            prompt?: string;
+            /** @enum {string} */
+            responseType?: "CHOICE" | "TEXT";
+            options?: components["schemas"]["CookingPlanQuestionOption"][];
+            required?: boolean;
+            suggestedValue?: string | null;
+        };
+        CookingPlanQuestionOption: {
+            value?: string;
+            label?: string;
+            suggested?: boolean;
+        };
+        CookingPlanDecision: {
+            optionId?: string;
+            optionType?: string;
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            planRevision?: string | null;
+        };
+        CookingPlanSafetyPolicy: {
+            region?: string;
+            version?: string;
+            /** Format: date */
+            effectiveAt?: string;
+            sources?: components["schemas"]["CookingPlanPolicySource"][];
+        };
+        CookingPlanPolicySource: {
+            sourceId?: string;
+            title?: string;
+            url?: string;
+        };
+        CookingQuestionAnswer: {
+            questionId: string;
+            value: string;
         };
         CookingPlanSummary: {
             /** Format: uuid */
             planId?: string;
-            status?: string;
-            /** Format: uuid */
-            sourceRecipeId?: string | null;
-            inputCount?: number;
-            stepCount?: number;
+            /** @enum {string} */
+            status?: "PROCESSING" | "READY" | "NEEDS_CONFIRMATION" | "INFEASIBLE" | "FAILED";
+            sourceCount?: number;
+            taskCount?: number;
+            makespanMinutes?: number | null;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -3878,6 +4000,64 @@ export interface components {
         };
         CookingPlanHistoryResponse: components["schemas"]["PageResponse"] & {
             items?: components["schemas"]["CookingPlanSummary"][];
+        };
+        CookingPlanAsyncAcceptedResponse: {
+            /** Format: uuid */
+            planId: string;
+            /** @enum {string} */
+            status: "PROCESSING" | "READY" | "NEEDS_CONFIRMATION" | "INFEASIBLE" | "FAILED";
+            /** @example task-0a1b2c3d */
+            taskId: string;
+            /** @example /api/v1/cooking-plans/0a1b2c3d-4e5f-6789-abcd-ef0123456789/task */
+            location: string;
+        };
+        CookingPlanTaskProgressResponse: {
+            /** @example solve_schedule */
+            node?: string | null;
+            /** @example 7 */
+            completedSteps: number;
+            /** @example Solving schedule */
+            message?: string | null;
+        };
+        CookingPlanTaskResponse: {
+            /** Format: uuid */
+            planId: string;
+            /** @example task-0a1b2c3d */
+            taskId: string;
+            /** @enum {string} */
+            status: "PROCESSING";
+            /** @enum {string} */
+            syncState: "PENDING" | "POLLING";
+            progress?: components["schemas"]["CookingPlanTaskProgressResponse"];
+        };
+        UserRecipeRequest: {
+            name: string;
+            servings: number;
+            imageUrl?: string | null;
+            tags?: string[];
+            allergenHints?: string[];
+            ingredients: string[];
+            steps: string[];
+        };
+        UserRecipeResponse: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            servings: number;
+            imageUrl?: string | null;
+            tags: string[];
+            allergenHints: string[];
+            ingredients: string[];
+            steps: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int64 */
+            version: number;
+        };
+        UserRecipePageResponse: components["schemas"]["PageResponse"] & {
+            items?: components["schemas"]["UserRecipeResponse"][];
         };
         /** @enum {string} */
         WantToTrySourceType: "FOOD_RECORD" | "MEAL" | "FOOD_PRODUCT" | "PLACE";
@@ -4204,4 +4384,420 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    generateCookingPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateCookingPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Cooking plan created or resolved from a matching idempotent retry. */
+            201: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getCookingPlan: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted cooking plan. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    submitCookingPlanDecisions: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "Idempotency-Key": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CookingQuestionAnswer"][];
+            };
+        };
+        responses: {
+            /** @description The new revision plan produced from the submitted decisions. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listCookingPlanHistory: {
+        parameters: {
+            query?: {
+                /** @description Zero-based page index. */
+                page?: components["parameters"]["Page"];
+                /** @description Bounded page size. */
+                size?: components["parameters"]["Size"];
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned cooking plan page. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanHistoryResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    generateCookingPlanAsync: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateCookingPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal FAILED plan returned because the task submission itself failed. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            /** @description Task accepted; poll the task endpoint until it returns 404, then read the plan. */
+            202: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanAsyncAcceptedResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getCookingPlanTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description In-flight async task status and last mirrored progress. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanTaskResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelCookingPlanTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The updated terminal plan (FAILED with TASK_CANCELLED). */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listUserRecipes: {
+        parameters: {
+            query?: {
+                /** @description Zero-based page index. */
+                page?: components["parameters"]["Page"];
+                /** @description Bounded page size. */
+                size?: components["parameters"]["Size"];
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped recipe page. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRecipePageResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createUserRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRecipeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created recipe. */
+            201: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    /** @description Current optimistic-lock version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRecipeResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getUserRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned recipe detail. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    /** @description Current optimistic-lock version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRecipeResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateUserRecipe: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "If-Match": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRecipeRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated recipe. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    /** @description New optimistic-lock version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRecipeResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteUserRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recipe deleted or already absent for this owner. */
+            204: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+}

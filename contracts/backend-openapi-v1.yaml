@@ -1976,15 +1976,19 @@ components:
     GenerateCookingPlanRequest:
       type: object
       required:
-        - ingredients
         - servings
       properties:
         ingredients:
           type: array
-          minItems: 1
           maxItems: 30
           items:
             $ref: '#/components/schemas/CookingIngredientRequest'
+        recipeIds:
+          type: array
+          maxItems: 25
+          items:
+            type: string
+            format: uuid
         servings:
           type: integer
           minimum: 1
@@ -2019,109 +2023,41 @@ components:
             type: string
           example:
             - PEANUT
-    CookingPlanInputResponse:
-      type: object
-      properties:
-        ingredientName:
+        servingAt:
           type: string
-        quantity:
-          type: number
+          format: date-time
           nullable: true
-        unit:
+          example: '2026-08-02T18:30:00+08:00'
+        region:
           type: string
+          maxLength: 8
           nullable: true
-        source:
-          type: string
-          enum:
-            - MANUAL
-            - AUTHORISED_PANTRY
-    CookingPlanIngredientResponse:
-      type: object
-      properties:
-        sequenceNo:
-          type: integer
-          minimum: 1
-        ingredientName:
-          type: string
-        quantity:
-          type: number
-          nullable: true
-        unit:
-          type: string
-          nullable: true
-        availability:
-          type: string
-          enum:
-            - AVAILABLE
-            - TO_BUY
-    CookingPlanStepResponse:
-      type: object
-      properties:
-        stepNo:
-          type: integer
-          minimum: 1
-        instruction:
-          type: string
-          maxLength: 4000
-    CookingPlanWarningResponse:
-      type: object
-      properties:
-        sequenceNo:
-          type: integer
-          minimum: 1
-        warningCode:
-          type: string
-          example: BUDGET_ESTIMATE_ONLY
-        message:
-          type: string
-          maxLength: 1000
+          example: SG
     CookingPlanResponse:
       type: object
       required:
         - planId
-        - traceId
         - status
-        - fallbackStatus
-        - inputs
-        - ingredients
-        - steps
-        - warnings
       properties:
         planId:
           type: string
           format: uuid
-        traceId:
-          type: string
         status:
           type: string
           enum:
-            - SUCCEEDED
-            - FALLBACK_SUCCEEDED
-            - NO_VALID_RECIPE
+            - PROCESSING
+            - READY
+            - NEEDS_CONFIRMATION
+            - INFEASIBLE
             - FAILED
-        sourceRecipeId:
-          type: string
-          format: uuid
-          nullable: true
-        agentContractVersion:
+        planRevision:
           type: string
           nullable: true
-          example: cooking-agent-v1
-        fallbackStatus:
-          type: string
-          enum:
-            - NOT_REQUIRED
-            - SUCCEEDED
-            - NO_VALID_RECIPE
-            - FAILED
-        fallbackVersion:
+          example: 3f4a…:v1
+        region:
           type: string
           nullable: true
-          example: cooking-fallback-v1
-        failureCode:
-          type: string
-          nullable: true
-          example: NO_RECIPE_MATCH
+          example: SG
         createdAt:
           type: string
           format: date-time
@@ -2129,22 +2065,317 @@ components:
           type: string
           format: date-time
           nullable: true
-        inputs:
+        solverStatus:
+          type: string
+          nullable: true
+          example: OPTIMAL
+        makespanMinutes:
+          type: integer
+          nullable: true
+          example: 54
+        errorCode:
+          type: string
+          nullable: true
+          example: SCHEDULE_UNKNOWN
+        errorMessage:
+          type: string
+          nullable: true
+        sources:
           type: array
           items:
-            $ref: '#/components/schemas/CookingPlanInputResponse'
-        ingredients:
+            $ref: '#/components/schemas/CookingPlanSource'
+        timeline:
           type: array
           items:
-            $ref: '#/components/schemas/CookingPlanIngredientResponse'
-        steps:
+            $ref: '#/components/schemas/CookingPlanTimelineTask'
+        miseEnPlace:
           type: array
           items:
-            $ref: '#/components/schemas/CookingPlanStepResponse'
-        warnings:
+            $ref: '#/components/schemas/CookingPlanMiseEnPlaceItem'
+        dishCompletions:
           type: array
           items:
-            $ref: '#/components/schemas/CookingPlanWarningResponse'
+            $ref: '#/components/schemas/CookingPlanDishCompletion'
+        completionChecklist:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanCompletionItem'
+        assumptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanAssumption'
+        repairOptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanRepairOption'
+        questions:
+          type: array
+          items:
+            type: string
+        confirmationQuestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanConfirmationQuestion'
+        decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanDecision'
+        reasons:
+          type: array
+          items:
+            type: string
+        safeAlternatives:
+          type: array
+          items:
+            type: string
+        safetyPolicy:
+          allOf:
+            - $ref: '#/components/schemas/CookingPlanSafetyPolicy'
+          nullable: true
+        explanation:
+          type: string
+          nullable: true
+        explanationSource:
+          type: string
+          nullable: true
+          example: deterministic
+    CookingPlanSource:
+      type: object
+      properties:
+        sequenceNo:
+          type: integer
+          minimum: 1
+        sourceType:
+          type: string
+          enum:
+            - CATALOGUE
+            - OWNER
+        sourceId:
+          type: string
+          format: uuid
+          nullable: true
+        targetServings:
+          type: number
+          minimum: 0
+        dishName:
+          type: string
+          nullable: true
+    CookingPlanTimelineTask:
+      type: object
+      properties:
+        taskId:
+          type: string
+        startMinute:
+          type: integer
+          minimum: 0
+        endMinute:
+          type: integer
+          minimum: 0
+        durationMinutes:
+          type: integer
+          minimum: 1
+        instruction:
+          type: string
+        dishId:
+          type: string
+        workMode:
+          type: string
+          enum:
+            - ACTIVE
+            - PASSIVE
+        category:
+          type: string
+        heatLevel:
+          type: string
+          enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+            - NONE
+          nullable: true
+        resources:
+          type: array
+          items:
+            type: string
+    CookingPlanMiseEnPlaceItem:
+      type: object
+      properties:
+        sequenceNo:
+          type: integer
+          minimum: 1
+        instruction:
+          type: string
+        ingredient:
+          type: string
+          nullable: true
+        operation:
+          type: string
+          nullable: true
+        durationMinutes:
+          type: integer
+          nullable: true
+        resources:
+          type: array
+          items:
+            type: string
+        whenNeeded:
+          type: string
+          nullable: true
+    CookingPlanDishCompletion:
+      type: object
+      properties:
+        dishId:
+          type: string
+        completionMinute:
+          type: integer
+          minimum: 0
+        taskCount:
+          type: integer
+          minimum: 0
+        isShared:
+          type: boolean
+    CookingPlanCompletionItem:
+      type: object
+      properties:
+        completionItemId:
+          type: string
+        ingredientName:
+          type: string
+        recipeIds:
+          type: array
+          items:
+            type: string
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanLotAllocation'
+    CookingPlanLotAllocation:
+      type: object
+      properties:
+        inventoryLotId:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+    CookingPlanAssumption:
+      type: object
+      properties:
+        text:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        sourceType:
+          type: string
+          nullable: true
+        evidenceUrl:
+          type: string
+          nullable: true
+    CookingPlanRepairOption:
+      type: object
+      properties:
+        optionId:
+          type: string
+        optionType:
+          type: string
+        description:
+          type: string
+        changes:
+          type: array
+          items:
+            type: string
+        effects:
+          type: array
+          items:
+            type: string
+        revalidationStatus:
+          type: string
+          example: validated
+    CookingPlanConfirmationQuestion:
+      type: object
+      properties:
+        questionId:
+          type: string
+        fieldPath:
+          type: string
+        prompt:
+          type: string
+        responseType:
+          type: string
+          enum:
+            - CHOICE
+            - TEXT
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanQuestionOption'
+        required:
+          type: boolean
+        suggestedValue:
+          type: string
+          nullable: true
+    CookingPlanQuestionOption:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+        suggested:
+          type: boolean
+    CookingPlanDecision:
+      type: object
+      properties:
+        optionId:
+          type: string
+        optionType:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+        planRevision:
+          type: string
+          nullable: true
+    CookingPlanSafetyPolicy:
+      type: object
+      properties:
+        region:
+          type: string
+        version:
+          type: string
+        effectiveAt:
+          type: string
+          format: date
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanPolicySource'
+    CookingPlanPolicySource:
+      type: object
+      properties:
+        sourceId:
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+    CookingQuestionAnswer:
+      type: object
+      required:
+        - questionId
+        - value
+      properties:
+        questionId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        value:
+          type: string
+          minLength: 1
+          maxLength: 500
     CookingPlanSummary:
       type: object
       properties:
@@ -2153,16 +2384,21 @@ components:
           format: uuid
         status:
           type: string
-        sourceRecipeId:
-          type: string
-          format: uuid
+          enum:
+            - PROCESSING
+            - READY
+            - NEEDS_CONFIRMATION
+            - INFEASIBLE
+            - FAILED
+        sourceCount:
+          type: integer
+          minimum: 0
+        taskCount:
+          type: integer
+          minimum: 0
+        makespanMinutes:
+          type: integer
           nullable: true
-        inputCount:
-          type: integer
-          minimum: 0
-        stepCount:
-          type: integer
-          minimum: 0
         createdAt:
           type: string
           format: date-time
@@ -2179,6 +2415,155 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/CookingPlanSummary'
+    CookingPlanAsyncAcceptedResponse:
+      type: object
+      required: [planId, status, taskId, location]
+      properties:
+        planId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - PROCESSING
+            - READY
+            - NEEDS_CONFIRMATION
+            - INFEASIBLE
+            - FAILED
+        taskId:
+          type: string
+          example: task-0a1b2c3d
+        location:
+          type: string
+          example: /api/v1/cooking-plans/0a1b2c3d-4e5f-6789-abcd-ef0123456789/task
+    CookingPlanTaskProgressResponse:
+      type: object
+      required: [completedSteps]
+      properties:
+        node:
+          type: string
+          nullable: true
+          example: solve_schedule
+        completedSteps:
+          type: integer
+          minimum: 0
+          example: 7
+        message:
+          type: string
+          nullable: true
+          example: Solving schedule
+    CookingPlanTaskResponse:
+      type: object
+      required: [planId, taskId, status, syncState]
+      properties:
+        planId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          example: task-0a1b2c3d
+        status:
+          type: string
+          enum: [PROCESSING]
+        syncState:
+          type: string
+          enum: [PENDING, POLLING]
+        progress:
+          $ref: '#/components/schemas/CookingPlanTaskProgressResponse'
+    UserRecipeRequest:
+      type: object
+      required: [name, servings, ingredients, steps]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        servings:
+          type: integer
+          minimum: 1
+          maximum: 50
+        imageUrl:
+          type: string
+          maxLength: 2048
+          nullable: true
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 80
+        allergenHints:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 80
+        ingredients:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1000
+    UserRecipeResponse:
+      type: object
+      required: [id, name, servings, tags, allergenHints, ingredients, steps, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        servings:
+          type: integer
+          minimum: 1
+          maximum: 50
+        imageUrl:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items: { type: string }
+        allergenHints:
+          type: array
+          items: { type: string }
+        ingredients:
+          type: array
+          items: { type: string }
+        steps:
+          type: array
+          items: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    UserRecipePageResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserRecipeResponse'
     WantToTrySourceType:
       type: string
       enum:
@@ -3124,7 +3509,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: '#/components/schemas/ApiErrorResponse'
     get:
       tags:
         - Chat
@@ -3165,6 +3550,7 @@ paths:
     post:
       tags:
         - Cooking Plans
+      operationId: generateCookingPlan
       summary: Generate a controlled cooking plan.
       description: Requires Idempotency-Key. The backend persists the request, resolves hard dietary/allergy rules, sends only active controlled recipe candidates to the Cooking Agent outside a database transaction, validates the structured result, and stores an immutable output snapshot.
       security:
@@ -3203,6 +3589,7 @@ paths:
     get:
       tags:
         - Cooking Plans
+      operationId: getCookingPlan
       summary: Read an owned cooking plan.
       description: Owner-only read returning immutable request and output snapshots.
       security:
@@ -3229,10 +3616,60 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /cooking-plans/{planId}/decisions:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: submitCookingPlanDecisions
+      summary: Submit decisions for a NEEDS_CONFIRMATION plan.
+      description: Validates the answers against the presented confirmation questions, guards the plan revision (409 when the plan is not awaiting confirmation), and re-runs the agent to produce a new revision plan.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CookingQuestionAnswer'
+      responses:
+        '200':
+          description: The new revision plan produced from the submitted decisions.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /cooking-plans/history:
     get:
       tags:
         - Cooking Plans
+      operationId: listCookingPlanHistory
       summary: List owned cooking plans.
       description: Returns only the authenticated user's plans using bounded pagination and stable createdAt/id ordering.
       security:
@@ -3253,6 +3690,287 @@ paths:
                 $ref: '#/components/schemas/CookingPlanHistoryResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /cooking-plans/generate-async:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: generateCookingPlanAsync
+      summary: Submit an async cooking-plan generation task.
+      description: Requires Idempotency-Key. Accepts the same request as /generate and returns 202 with a task handle; the background coordinator polls the agent task and materialises the terminal plan. If the submission itself fails, a terminal FAILED plan is returned with 200.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCookingPlanRequest'
+      responses:
+        '202':
+          description: Task accepted; poll the task endpoint until it returns 404, then read the plan.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanAsyncAcceptedResponse'
+        '200':
+          description: Terminal FAILED plan returned because the task submission itself failed.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}/task:
+    get:
+      tags:
+        - Cooking Plans
+      operationId: getCookingPlanTask
+      summary: Read the async task handle of an in-flight cooking plan.
+      description: Returns 200 only while the plan is PROCESSING and a generation record exists; terminal plans return 404 (clients then poll GET /cooking-plans/{planId}).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: In-flight async task status and last mirrored progress.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanTaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cooking-plans/{planId}/cancel:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: cancelCookingPlanTask
+      summary: Cancel an in-flight async cooking-plan task.
+      description: Cancels the agent task and materialises the plan as FAILED(TASK_CANCELLED). Conflicts (409) when the plan is not a PROCESSING async task.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The updated terminal plan (FAILED with TASK_CANCELLED).
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /recipes:
+    get:
+      tags:
+        - Recipes
+      operationId: listUserRecipes
+      summary: List the authenticated user's recipes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Owner-scoped recipe page.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRecipePageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Recipes
+      operationId: createUserRecipe
+      summary: Create an owned recipe.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRecipeRequest'
+      responses:
+        '201':
+          description: Created recipe.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: Current optimistic-lock version.
+              schema:
+                type: string
+                example: '"0"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRecipeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /recipes/{id}:
+    get:
+      tags:
+        - Recipes
+      operationId: getUserRecipe
+      summary: Read an owned recipe.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Owned recipe detail.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: Current optimistic-lock version.
+              schema:
+                type: string
+                example: '"0"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRecipeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Recipes
+      operationId: updateUserRecipe
+      summary: Update an owned recipe with optimistic locking.
+      description: Requires If-Match with the current numeric version. Non-owners receive a non-disclosing 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            example: '"0"'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRecipeRequest'
+      responses:
+        '200':
+          description: Updated recipe.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+            ETag:
+              description: New optimistic-lock version.
+              schema:
+                type: string
+                example: '"1"'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRecipeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Recipes
+      operationId: deleteUserRecipe
+      summary: Soft-delete an owned recipe.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Recipe deleted or already absent for this owner.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /recommendations/generate:
     post:
       tags:
