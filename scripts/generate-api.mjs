@@ -16,8 +16,8 @@ try {
   const contract = await readFile(sourcePath, 'utf8')
   const invalidReference = "#/components/schemas/ApiError'"
   const occurrences = contract.split(invalidReference).length - 1
-  if (occurrences !== 1) {
-    throw new Error(`Expected one known ApiError reference defect, found ${occurrences}. Review the backend contract.`)
+  if (occurrences !== 0) {
+    throw new Error(`Expected no known ApiError reference defect, found ${occurrences}. Review the backend contract.`)
   }
 
   // Backend controllers and every shared error response use ApiErrorResponse.

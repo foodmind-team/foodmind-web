@@ -33,6 +33,7 @@ describe('query keys', () => {
     expect(queryKeys.explore.search({ q: 'ramen' })).toEqual(['search', { q: 'ramen' }])
     expect(queryKeys.cooking.detail('c1')).toEqual(['cooking', 'c1'])
     expect(queryKeys.cooking.history()).toEqual(['cooking', 'history'])
+    expect(queryKeys.cooking.task('c1')).toEqual(['cooking', 'c1', 'task'])
     expect(queryKeys.chat.sessions()).toEqual(['chat', 'sessions'])
     expect(queryKeys.chat.detail('c1')).toEqual(['chat', 'c1'])
     expect(queryKeys.analytics.dashboard({ range: 'week' })).toEqual(['analytics', { range: 'week' }])
