@@ -30,6 +30,11 @@ function optionalNumber(value: string) {
   return value.trim() ? Number(value) : null
 }
 
+function positiveNumber(value: string) {
+  const n = optionalNumber(value)
+  return n !== null && n > 0 ? n : null
+}
+
 function errorStatus(error: unknown) {
   return error instanceof ApiError ? error.status : undefined
 }
@@ -57,6 +62,7 @@ export function CookingPage() {
   const generate = useMutation({
     mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/generate', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
     onSuccess: (plan) => { command.current = null; queryClient.setQueryData(queryKeys.cooking.detail(plan.planId), plan); void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() }); navigate(`/cooking/${plan.planId}`) },
+    onError: () => { command.current = null },
   })
   const generateAsync = useMutation({
     mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow(await api.POST('/cooking-plans/generate-async', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
@@ -66,11 +72,12 @@ export function CookingPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
       navigate(`/cooking/${result.planId}`)
     },
+    onError: () => { command.current = null },
   })
   const buildBody = (values: CookingForm): Schema<'GenerateCookingPlanRequest'> => {
     const nonEmpty = values.ingredients.filter((item) => item.ingredientName.trim())
     return {
-      ingredients: nonEmpty.map((item) => ({ ingredientName: item.ingredientName.trim(), quantity: optionalNumber(item.quantity), unit: item.unit || null, source: 'MANUAL' })),
+      ingredients: nonEmpty.map((item) => ({ ingredientName: item.ingredientName.trim(), quantity: positiveNumber(item.quantity), unit: item.unit || null, source: 'MANUAL' })),
       servings: Number(values.servings), maxMinutes: optionalNumber(values.maxMinutes), maxBudget: optionalNumber(values.maxBudget), currency: values.maxBudget ? values.currency.toUpperCase() : null,
       requiredDietaryTagCodes: values.requiredDietaryTagCodes, avoidAllergenCodes: values.avoidAllergenCodes,
     }
@@ -97,6 +104,7 @@ export function CookingPage() {
 
 export function CookingDetailPage() {
   const { planId = '' } = useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const progressKey = `foodmind.cooking-tasks.v1:${planId}`
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(() => {
@@ -105,6 +113,7 @@ export function CookingDetailPage() {
       return new Set(stored ? JSON.parse(stored) as string[] : [])
     } catch { return new Set() }
   })
+  const [decisionAnswers, setDecisionAnswers] = useState<Record<string, string>>({})
   useEffect(() => {
     try { window.sessionStorage.setItem(progressKey, JSON.stringify([...completedTasks])) } catch { /* execution progress remains optional session state */ }
   }, [completedTasks, progressKey])
@@ -128,6 +137,15 @@ export function CookingDetailPage() {
     mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/cancel', { params: { path: { planId } } })),
     onSuccess: (result) => { queryClient.setQueryData(queryKeys.cooking.detail(planId), result); void plan.refetch() },
     onError: (error) => { if (errorStatus(error) === 409) void plan.refetch() },
+  })
+  const submitDecisions = useMutation({
+    mutationFn: async (answers: Schema<'CookingQuestionAnswer'>[]) => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/decisions', { body: answers, params: { path: { planId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })),
+    onSuccess: (result) => {
+      setDecisionAnswers({})
+      queryClient.setQueryData(queryKeys.cooking.detail(result.planId), result)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
+      navigate(`/cooking/${result.planId}`, { replace: true })
+    },
   })
   if (plan.isLoading) return <div className="page"><LoadingState label="Opening your cooking plan…" /></div>
   if (plan.isError) return <div className="page"><ErrorState error={plan.error} onRetry={() => void plan.refetch()} /></div>
@@ -166,13 +184,20 @@ export function CookingDetailPage() {
   }
   if (data.status === 'NEEDS_CONFIRMATION') {
     const questions = data.confirmationQuestions || []
+    const answers = questions.flatMap((question) => {
+      const questionId = question.questionId
+      const value = questionId ? decisionAnswers[questionId]?.trim() : ''
+      return questionId && value ? [{ questionId, value }] : []
+    })
+    const requiredComplete = questions.every((question) => !question.required || Boolean(question.questionId && decisionAnswers[question.questionId]?.trim()))
     return (
       <div className="page section-page cooking-result-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.createdAt)}</p><h1>Your plan needs a decision</h1><p>{data.explanation || 'The Cooking Agent produced a plan but needs a few answers before it can finish.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
-        {questions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} disabled /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
+        {questions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.responseType === 'CHOICE' && question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value} checked={Boolean(question.questionId && decisionAnswers[question.questionId] === option.value)} onChange={() => { if (question.questionId && option.value) setDecisionAnswers((current) => ({ ...current, [question.questionId!]: option.value! })) }} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}{question.responseType === 'TEXT' && question.questionId && <label>Answer<input maxLength={500} value={decisionAnswers[question.questionId] || ''} onChange={(event) => setDecisionAnswers((current) => ({ ...current, [question.questionId!]: event.target.value }))} placeholder={question.suggestedValue || 'Enter your answer'} /></label>}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
         {!questions.length && <EmptyState title="Awaiting confirmation" message="This plan is waiting for decisions that are not available on this device yet." />}
-        <p className="field-note">Submitting confirmation decisions from this device is not implemented yet. The plan stays pending until answered elsewhere.</p>
+        {submitDecisions.isError && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error)}</div>}
+        {questions.length > 0 && <button className="primary-action" type="button" disabled={!requiredComplete || !answers.length || submitDecisions.isPending} onClick={() => submitDecisions.mutate(answers)}>{submitDecisions.isPending ? 'Applying decisions…' : 'Apply decisions and rebuild plan'}</button>}
       </div>
     )
   }

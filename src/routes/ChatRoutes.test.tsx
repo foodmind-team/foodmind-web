@@ -39,7 +39,7 @@ describe('grounded chatbot', () => {
     await userEvent.type(composer, 'Summarise my recent meals')
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
 
-    await waitFor(() => expect(posted).toHaveBeenCalledWith({ content: 'Summarise my recent meals' }))
+    await waitFor(() => expect(posted).toHaveBeenCalledWith({ content: 'Summarise my recent meals', referenceIds: [] }))
     expect(posted.mock.calls[0][0]).not.toHaveProperty('route')
     expect(await screen.findByText(assistant.content)).toBeInTheDocument()
   })
