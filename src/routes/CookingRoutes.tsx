@@ -97,6 +97,7 @@ export function CookingPage() {
 
 export function CookingDetailPage() {
   const { planId = '' } = useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const progressKey = `foodmind.cooking-tasks.v1:${planId}`
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(() => {
@@ -109,6 +110,7 @@ export function CookingDetailPage() {
     try { window.sessionStorage.setItem(progressKey, JSON.stringify([...completedTasks])) } catch { /* execution progress remains optional session state */ }
   }, [completedTasks, progressKey])
   const plan = useQuery({ queryKey: queryKeys.cooking.detail(planId), queryFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.GET('/cooking-plans/{planId}', { params: { path: { planId } } })) })
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const isProcessing = plan.data?.status === 'PROCESSING'
   const task = useQuery({
     queryKey: queryKeys.cooking.task(planId),
@@ -128,6 +130,17 @@ export function CookingDetailPage() {
     mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/cancel', { params: { path: { planId } } })),
     onSuccess: (result) => { queryClient.setQueryData(queryKeys.cooking.detail(planId), result); void plan.refetch() },
     onError: (error) => { if (errorStatus(error) === 409) void plan.refetch() },
+  })
+  const submitDecisions = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/decisions', {
+      params: { path: { planId }, header: { 'Idempotency-Key': crypto.randomUUID() } },
+      body: Object.entries(answers).map(([questionId, value]) => ({ questionId, value })),
+    })),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.cooking.detail(result.planId), result)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
+      navigate(`/cooking/${result.planId}`)
+    },
   })
   if (plan.isLoading) return <div className="page"><LoadingState label="Opening your cooking plan…" /></div>
   if (plan.isError) return <div className="page"><ErrorState error={plan.error} onRetry={() => void plan.refetch()} /></div>
@@ -166,13 +179,15 @@ export function CookingDetailPage() {
   }
   if (data.status === 'NEEDS_CONFIRMATION') {
     const questions = data.confirmationQuestions || []
+    const requiredMissing = questions.some((question) => question.required && !answers[question.questionId || ''])
     return (
       <div className="page section-page cooking-result-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.createdAt)}</p><h1>Your plan needs a decision</h1><p>{data.explanation || 'The Cooking Agent produced a plan but needs a few answers before it can finish.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
-        {questions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} disabled /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
+        {questions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
         {!questions.length && <EmptyState title="Awaiting confirmation" message="This plan is waiting for decisions that are not available on this device yet." />}
-        <p className="field-note">Submitting confirmation decisions from this device is not implemented yet. The plan stays pending until answered elsewhere.</p>
+        {submitDecisions.isError && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error)}</div>}
+        {questions.length > 0 && <button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Updating plan…' : 'Confirm and continue'}</button>}
       </div>
     )
   }
