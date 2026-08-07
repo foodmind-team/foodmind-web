@@ -171,10 +171,10 @@ export function CookingRecipeSelectPage() {
   const requestIngredients = scaledRecipeIngredients(selectedRecipes, servings)
   const tooManyIngredients = requestIngredients.length > 30
   const generate = useMutation({
-    mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/generate', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
+    mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow(await api.POST('/cooking-plans/generate-async', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
     onSuccess: (plan) => {
       command.current = null
-      queryClient.setQueryData(queryKeys.cooking.detail(plan.planId), plan)
+      queryClient.setQueryData(queryKeys.cooking.detail(plan.planId), plan.status === 'PROCESSING' ? { planId: plan.planId, status: 'PROCESSING' as const } : plan)
       void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
       navigate(`/cooking/${plan.planId}`)
     },
@@ -203,7 +203,7 @@ export function CookingRecipeSelectPage() {
         <div className="selection-summary"><span>{selectedRecipes.length}</span><div><strong>{selectedRecipes.length === 1 ? 'recipe selected' : 'recipes selected'}</strong><small>{requestIngredients.length} ingredient lines will be sent</small></div></div>
         <label><Users size={15} /><span>Servings</span><input type="number" min="1" max="24" value={servings} onChange={(event) => setServings(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} /></label>
         <label><Clock3 size={15} /><span>Time limit</span><input type="number" min="1" max="1440" value={maxMinutes} onChange={(event) => setMaxMinutes(event.target.value)} placeholder="Any" /></label>
-        <button className="generate-button" type="button" disabled={!selectedRecipes.length || tooManyIngredients || generate.isPending} onClick={submit}>{generate.isPending ? 'Building your plan…' : <>Generate plan <ArrowRight size={17} /></>}</button>
+        <button className="generate-button" type="button" disabled={!selectedRecipes.length || tooManyIngredients || generate.isPending} onClick={submit}>{generate.isPending ? 'Submitting to Cooking Agent…' : <>Generate plan <ArrowRight size={17} /></>}</button>
       </section>
       {tooManyIngredients && <div className="form-alert selection-error" role="alert">This selection has {requestIngredients.length} ingredient lines. Choose fewer recipes so the existing API limit of 30 is respected.</div>}
       {generate.isError && <div className="form-alert selection-error" role="alert">{errorMessage(generate.error)}</div>}
