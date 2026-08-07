@@ -11,6 +11,7 @@ import { CookingDetailPage, CookingPage } from './CookingRoutes'
 const origin = 'http://localhost:3000'
 const planId = '00000000-0000-4000-8000-000000000042'
 const taskId = 'task-0a1b2c3d'
+const decidedPlanId = '00000000-0000-4000-8000-000000000043'
 const references = { cuisines: [], dietaryTags: [], allergens: [], mealTypes: ['DINNER'], placeTypes: [] }
 const emptyHistory = { items: [], page: 0, size: 8, totalItems: 0, totalPages: 0, hasNext: false }
 const readyPlan = {
@@ -162,5 +163,43 @@ describe('cooking plan async generation', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
     expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/)
+  })
+
+  it('navigates to the new plan returned after confirmation decisions', async () => {
+    const user = userEvent.setup()
+    let submittedBody: unknown
+    const confirmationPlan = {
+      planId,
+      status: 'NEEDS_CONFIRMATION',
+      createdAt: '2026-08-02T10:00:00Z',
+      confirmationQuestions: [{
+        questionId: 'repair:purchase-tofu',
+        fieldPath: 'repair_options',
+        prompt: 'Purchase the missing tofu?',
+        responseType: 'CHOICE',
+        required: false,
+        options: [
+          { value: 'purchase-tofu', label: 'Apply', suggested: true },
+          { value: '__skip__', label: 'Do not apply', suggested: false },
+        ],
+      }],
+    }
+    const decidedPlan = { ...readyPlan, planId: decidedPlanId }
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(confirmationPlan)),
+      http.post(`${origin}/api/v1/cooking-plans/${planId}/decisions`, async ({ request }) => {
+        submittedBody = await request.json()
+        expect(request.headers.get('idempotency-key')).toMatch(/[0-9a-f-]{36}/)
+        return HttpResponse.json(decidedPlan, { status: 201 })
+      }),
+      http.get(`${origin}/api/v1/cooking-plans/${decidedPlanId}`, () => HttpResponse.json(decidedPlan)),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+    await user.click(await screen.findByRole('radio', { name: /^apply · suggested$/i }))
+    await user.click(screen.getByRole('button', { name: /apply decisions and rebuild plan/i }))
+
+    expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
+    expect(submittedBody).toEqual([{ questionId: 'repair:purchase-tofu', value: 'purchase-tofu' }])
   })
 })

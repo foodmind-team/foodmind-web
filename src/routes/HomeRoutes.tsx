@@ -120,6 +120,7 @@ export function HomePage() {
       command.current = null
       navigate(`/recommendations/${result.sessionId}`)
     },
+    onError: () => { command.current = null },
   })
 
   const submit = handleSubmit((form) => {
@@ -127,7 +128,7 @@ export function HomePage() {
       groupId: form.groupId || undefined,
       mealType: form.mealType || undefined,
       maxBudget: optionalNumber(form.maxBudget),
-      currency: form.currency.toUpperCase(),
+      currency: form.maxBudget ? form.currency.toUpperCase() : undefined,
       area: form.area || undefined,
       latitude: optionalNumber(form.latitude),
       longitude: optionalNumber(form.longitude),

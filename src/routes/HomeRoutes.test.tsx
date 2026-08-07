@@ -23,16 +23,23 @@ function renderRoute(initialEntry: string, page: React.ReactNode, path: string) 
 describe('recommendation decision loop', () => {
   it('generates a typed recommendation with an idempotency key', async () => {
     let idempotencyKey = ''
+    let generatedBody: { maxBudget?: number; currency?: string } = {}
     server.use(
       http.get(`${origin}/api/v1/groups`, () => HttpResponse.json(groups)),
       http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(references)),
       http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(preferences)),
-      http.post(`${origin}/api/v1/recommendations/generate`, ({ request }) => { idempotencyKey = request.headers.get('idempotency-key') || ''; return HttpResponse.json(recommendation, { status: 201 }) }),
+      http.post(`${origin}/api/v1/recommendations/generate`, async ({ request }) => {
+        idempotencyKey = request.headers.get('idempotency-key') || ''
+        generatedBody = await request.json() as typeof generatedBody
+        return HttpResponse.json(recommendation, { status: 201 })
+      }),
     )
     renderRoute('/', <HomePage />, '/')
     await userEvent.click(await screen.findByRole('button', { name: /generate recommendation/i }))
     expect(await screen.findByText('Recommendation opened')).toBeInTheDocument()
     expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/)
+    expect(generatedBody.maxBudget).toBeUndefined()
+    expect(generatedBody.currency).toBeUndefined()
   })
 
   it('reveals the next returned candidate without a network mutation', async () => {
