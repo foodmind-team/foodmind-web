@@ -15,34 +15,16 @@
       "reason": "NEEDS_CONFIRMATION decision submission is out of scope for the async-generation web increment; the plan stays pending and the client renders the questions read-only."
     },
     {
-      "method": "GET",
-      "path": "/recipes",
-      "source": "contracts/backend-openapi-v1.yaml",
-      "reason": "Server-owned recipe CRUD is out of scope for the async-generation web increment; Web keeps device-local recipe drafts only."
-    },
-    {
       "method": "POST",
-      "path": "/recipes",
+      "path": "/cooking-plans/generate",
       "source": "contracts/backend-openapi-v1.yaml",
-      "reason": "Server-owned recipe CRUD is out of scope for the async-generation web increment; Web keeps device-local recipe drafts only."
+      "reason": "Web preserves the asynchronous user experience and uses generate-async; synchronous generation remains available to other clients."
     },
     {
       "method": "GET",
-      "path": "/recipes/{id}",
+      "path": "/inventory/lots/{lotId}",
       "source": "contracts/backend-openapi-v1.yaml",
-      "reason": "Server-owned recipe CRUD is out of scope for the async-generation web increment; Web keeps device-local recipe drafts only."
-    },
-    {
-      "method": "PUT",
-      "path": "/recipes/{id}",
-      "source": "contracts/backend-openapi-v1.yaml",
-      "reason": "Server-owned recipe CRUD is out of scope for the async-generation web increment; Web keeps device-local recipe drafts only."
-    },
-    {
-      "method": "DELETE",
-      "path": "/recipes/{id}",
-      "source": "contracts/backend-openapi-v1.yaml",
-      "reason": "Server-owned recipe CRUD is out of scope for the async-generation web increment; Web keeps device-local recipe drafts only."
+      "reason": "The inventory page reads bounded lot details through the list representation; the single-lot read remains available for Android deep links."
     }
   ]
 }

@@ -42,6 +42,20 @@ export const queryKeys = {
     history: () => ['cooking', 'history'] as const,
     task: (id: string) => ['cooking', id, 'task'] as const,
   },
+  recipes: {
+    list: () => ['recipes', 'list'] as const,
+    detail: (id: string) => ['recipes', id] as const,
+  },
+  recipeImports: {
+    detail: (id: string) => ['recipe-imports', id] as const,
+  },
+  inventory: {
+    list: () => ['inventory', 'lots'] as const,
+  },
+  shopping: {
+    list: (status?: string) => ['shopping', 'lists', status || 'ALL'] as const,
+    detail: (id: string) => ['shopping', id] as const,
+  },
   chat: {
     sessions: () => ['chat', 'sessions'] as const,
     detail: (id: string) => ['chat', id] as const,

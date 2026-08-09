@@ -2470,6 +2470,307 @@ components:
           enum: [PENDING, POLLING]
         progress:
           $ref: '#/components/schemas/CookingPlanTaskProgressResponse'
+    InventoryLotRequest:
+      type: object
+      additionalProperties: false
+      required: [ingredientName, quantity, unit]
+      properties:
+        ingredientName:
+          type: string
+          minLength: 1
+          maxLength: 128
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 16
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+    InventoryLotResponse:
+      type: object
+      required: [lotId, ingredientName, quantity, reserved, available, unit, purchasedAt, createdAt, updatedAt, version]
+      properties:
+        lotId:
+          type: string
+          format: uuid
+        ingredientName:
+          type: string
+        quantity:
+          type: number
+        reserved:
+          type: number
+        available:
+          type: number
+        unit:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        purchasedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    InventoryLotPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/InventoryLotResponse'
+    UpdateShoppingListItemRequest:
+      type: object
+      additionalProperties: false
+      required: [checked, purchasedQuantity, unit]
+      properties:
+        checked:
+          type: boolean
+        purchasedQuantity:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 16
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+    ShoppingListItemResponse:
+      type: object
+      required: [itemId, sequenceNo, ingredientName, requiredQuantity, purchasedQuantity, unit, checked, version]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        sequenceNo:
+          type: integer
+          minimum: 1
+        ingredientName:
+          type: string
+        requiredQuantity:
+          type: number
+          exclusiveMinimum: 0
+        purchasedQuantity:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        checked:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ShoppingListResponse:
+      type: object
+      required: [shoppingListId, sourcePlanId, rootPlanId, originalServings, status, checkedItemCount, totalItemCount, createdAt, updatedAt, version, items]
+      properties:
+        shoppingListId:
+          type: string
+          format: uuid
+        sourcePlanId:
+          type: string
+          format: uuid
+        rootPlanId:
+          type: string
+          format: uuid
+        originalServings:
+          type: integer
+          minimum: 1
+          maximum: 24
+        continuationPlanId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [OPEN, COMPLETED]
+        checkedItemCount:
+          type: integer
+          minimum: 0
+        totalItemCount:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ShoppingListItemResponse'
+    ShoppingListPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/PageResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ShoppingListResponse'
+    CreateRecipeImportRequest:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 100000
+          description: English-only text containing one or more recipes.
+    RecipeImportAnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [questionId, value]
+      properties:
+        questionId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        value:
+          type: string
+          minLength: 1
+          maxLength: 20000
+    RecipeImportAnswersRequest:
+      type: object
+      additionalProperties: false
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            $ref: '#/components/schemas/RecipeImportAnswerRequest'
+    RecipeImportDraft:
+      type: object
+      required: [draftId, ingredients, steps]
+      properties:
+        draftId:
+          type: string
+        name:
+          type: string
+          nullable: true
+        servings:
+          type: integer
+          minimum: 1
+          maximum: 50
+          nullable: true
+        ingredients:
+          type: array
+          maxItems: 100
+          items: { type: string }
+        steps:
+          type: array
+          maxItems: 100
+          items: { type: string }
+    RecipeImportQuestion:
+      type: object
+      required: [questionId, draftId, fieldPath, prompt, responseType, required]
+      properties:
+        questionId:
+          type: string
+        draftId:
+          type: string
+        fieldPath:
+          type: string
+        prompt:
+          type: string
+        responseType:
+          type: string
+          enum: [TEXT]
+        required:
+          type: boolean
+        suggestedValue:
+          type: string
+          nullable: true
+    RecipeImportAnswer:
+      type: object
+      required: [questionId, value]
+      properties:
+        questionId:
+          type: string
+        value:
+          type: string
+    RecipeImportResponse:
+      type: object
+      required: [importId, text, status, drafts, questions, answers, createdRecipes, createdAt, updatedAt, version]
+      properties:
+        importId:
+          type: string
+          format: uuid
+        text:
+          type: string
+        status:
+          type: string
+          enum: [PROCESSING, NEEDS_CLARIFICATION, READY, COMPLETED, FAILED]
+        drafts:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeImportDraft'
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeImportQuestion'
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeImportAnswer'
+        createdRecipes:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserRecipeResponse'
+        failureCode:
+          type: string
+          nullable: true
+        failureMessage:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 0
     UserRecipeRequest:
       type: object
       required: [name, servings, ingredients, steps]
@@ -3665,6 +3966,58 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}/decisions-async:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: submitCookingPlanDecisionsAsync
+      summary: Submit decisions and asynchronously revalidate a cooking plan.
+      description: Validates answers against the persisted confirmation form and returns an async child plan. Inventory purchase is an external Shopping List flow and is never accepted as fabricated Agent inventory.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CookingQuestionAnswer'
+      responses:
+        '202':
+          description: Child task accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanAsyncAcceptedResponse'
+        '200':
+          description: Terminal FAILED plan returned because task submission failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /cooking-plans/history:
     get:
       tags:
@@ -3796,6 +4149,466 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CookingPlanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}/shopping-list:
+    post:
+      tags:
+        - Shopping Lists
+      operationId: getOrCreateCookingPlanShoppingList
+      summary: Persist the shopping list for a cooking-plan shortage.
+      description: Idempotently creates an owner-scoped list from the original root plan purchase decision. When a reduced child still lacks stock, quantities remain based on the original servings.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Persisted shopping list, or the existing list for an idempotent retry.
+          headers:
+            ETag:
+              description: Current list version.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /inventory/lots:
+    get:
+      tags:
+        - Inventory
+      operationId: listInventoryLots
+      summary: List active inventory lots for the authenticated user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Active inventory lot page ordered by expiry and creation time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryLotPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Inventory
+      operationId: createInventoryLot
+      summary: Add a real inventory lot.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryLotRequest'
+      responses:
+        '201':
+          description: Inventory lot created.
+          headers:
+            ETag:
+              description: Current lot version.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryLotResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /inventory/lots/{lotId}:
+    get:
+      tags:
+        - Inventory
+      operationId: getInventoryLot
+      summary: Read an active owned inventory lot.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: lotId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Inventory lot detail.
+          headers:
+            ETag:
+              description: Current lot version.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryLotResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Inventory
+      operationId: updateInventoryLot
+      summary: Replace an inventory lot using optimistic locking.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: lotId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryLotRequest'
+      responses:
+        '200':
+          description: Updated inventory lot.
+          headers:
+            ETag:
+              description: New lot version.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryLotResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Inventory
+      operationId: archiveInventoryLot
+      summary: Archive an inventory lot using optimistic locking.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: lotId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Inventory lot archived.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /shopping-lists:
+    get:
+      tags:
+        - Shopping Lists
+      operationId: listShoppingLists
+      summary: List persisted shopping lists for the authenticated user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, COMPLETED]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Owner-scoped shopping-list page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /shopping-lists/{shoppingListId}:
+    get:
+      tags:
+        - Shopping Lists
+      operationId: getShoppingList
+      summary: Read a persisted shopping list.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: shoppingListId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Shopping-list detail.
+          headers:
+            ETag:
+              description: Current list version.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /shopping-lists/{shoppingListId}/items/{itemId}:
+    patch:
+      tags:
+        - Shopping Lists
+      operationId: updateShoppingListItem
+      summary: Persist purchased quantity, unit, expiry and checked state.
+      description: If-Match is the current shopping-list item version returned in the item payload.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: shoppingListId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateShoppingListItemRequest'
+      responses:
+        '200':
+          description: Updated shopping list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /shopping-lists/{shoppingListId}/complete:
+    post:
+      tags:
+        - Shopping Lists
+      operationId: completeShoppingList
+      summary: Commit checked purchases to inventory and asynchronously continue the original plan.
+      description: Requires every item to be checked. Inventory creation is atomic and exactly-once for the list; the original root servings are then revalidated against real inventory.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: shoppingListId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '202':
+          description: Original-servings continuation task accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanAsyncAcceptedResponse'
+        '200':
+          description: Existing or terminal continuation plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /recipe-imports:
+    post:
+      tags:
+        - Recipe Imports
+      operationId: createRecipeImport
+      summary: Parse an English text containing one or more recipes.
+      description: Persists an owner-scoped import session and returns structured Agent follow-up questions when required recipe facts are missing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecipeImportRequest'
+      responses:
+        '201':
+          description: Persisted recipe-import session.
+          headers:
+            ETag:
+              description: Current optimistic-lock version.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeImportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /recipe-imports/{importId}:
+    get:
+      tags:
+        - Recipe Imports
+      operationId: getRecipeImport
+      summary: Read an owner-scoped persisted recipe-import session.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: importId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current import session.
+          headers:
+            ETag:
+              description: Current optimistic-lock version.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeImportResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /recipe-imports/{importId}/answers:
+    post:
+      tags:
+        - Recipe Imports
+      operationId: answerRecipeImport
+      summary: Answer the current structured Agent follow-up questions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: importId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipeImportAnswersRequest'
+      responses:
+        '200':
+          description: Updated import session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeImportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /recipe-imports/{importId}/confirm:
+    post:
+      tags:
+        - Recipe Imports
+      operationId: confirmRecipeImport
+      summary: Atomically save every ready draft as an owned Backend Recipe.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: importId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Completed session with every created recipe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeImportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

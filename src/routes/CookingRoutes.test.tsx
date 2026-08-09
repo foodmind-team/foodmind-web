@@ -1,19 +1,30 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
-import { CookingDetailPage, CookingPage } from './CookingRoutes'
+import { CookingDetailPage } from './CookingRoutes'
+import { CookingSelectPage } from './CookingSelectionPage'
+
+vi.mock('../app/providers/AuthProvider', () => ({
+  useAuth: () => ({ user: { id: 'test-user' } }),
+}))
 
 const origin = 'http://localhost:3000'
 const planId = '00000000-0000-4000-8000-000000000042'
 const taskId = 'task-0a1b2c3d'
-const decidedPlanId = '00000000-0000-4000-8000-000000000043'
-const references = { cuisines: [], dietaryTags: [], allergens: [], mealTypes: ['DINNER'], placeTypes: [] }
-const emptyHistory = { items: [], page: 0, size: 8, totalItems: 0, totalPages: 0, hasNext: false }
+const recipeOneId = '00000000-0000-4000-8000-000000000101'
+const recipeTwoId = '00000000-0000-4000-8000-000000000102'
+const recipePage = {
+  items: [
+    { id: recipeOneId, name: 'Scrambled Eggs with Tomato', servings: 2, imageUrl: null, tags: ['Weeknight'], allergenHints: ['EGG'], ingredients: ['3 eggs', '200 g tomatoes'], steps: ['Cook the eggs.'], createdAt: '2026-08-02T09:00:00Z', updatedAt: '2026-08-02T09:00:00Z', version: 0 },
+    { id: recipeTwoId, name: 'Corn & Rib Soup', servings: 4, imageUrl: null, tags: ['Soup'], allergenHints: [], ingredients: ['500 g pork ribs', '2 corn cobs'], steps: ['Simmer until tender.'], createdAt: '2026-08-02T09:00:00Z', updatedAt: '2026-08-02T09:00:00Z', version: 0 },
+  ],
+  page: 0, size: 100, totalItems: 2, totalPages: 1, hasNext: false,
+}
 const readyPlan = {
   planId,
   status: 'READY',
@@ -34,23 +45,123 @@ const readyPlan = {
   assumptions: [{ text: 'Firm tofu substitutes silken tofu.', sourceType: 'pantry' }],
 }
 
-function renderCookingRoutes(initialEntry = '/cooking') {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking" element={<CookingPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+const confirmationPlan = {
+  planId,
+  status: 'NEEDS_CONFIRMATION',
+  createdAt: '2026-08-02T10:00:00Z',
+  explanation: 'Some ingredients are missing. Choose a recovery strategy.',
+  repairOptions: [
+    {
+      optionId: 'repair_purchase_broccoli',
+      optionType: 'purchase',
+      description: "Purchase 90 g of 'Broccoli' (no known substitute available)",
+      changes: ['Add broccoli to the shopping list'],
+      effects: ['Broccoli shortage resolved'],
+      revalidationStatus: 'validated',
+    },
+    {
+      optionId: 'repair_purchase_tomato',
+      optionType: 'purchase',
+      description: "Purchase 200 g of 'Canned tomatoes' (no known substitute available)",
+      changes: ['Add canned tomatoes to the shopping list'],
+      effects: ['Tomato shortage resolved'],
+      revalidationStatus: 'validated',
+    },
+    {
+      optionId: 'repair_servings_1_abc',
+      optionType: 'reduce_servings',
+      description: 'Reduce servings from 2 to 1 (available ingredients support ~50% of original portions)',
+      changes: ['Scale all ingredient quantities to 1 serving'],
+      effects: ['All ingredient shortages resolved by scaling down'],
+      revalidationStatus: 'validated',
+    },
+  ],
+  confirmationQuestions: [
+    {
+      questionId: 'repair:strategy',
+      fieldPath: 'repair_strategy',
+      prompt: 'Some ingredients are missing. Choose how to continue.',
+      responseType: 'CHOICE',
+      required: true,
+      options: [
+        { value: 'repair_servings_1_abc', label: 'Reduce to 1 serving', suggested: true },
+        { value: 'repair_purchase_bundle', label: 'Buy missing ingredients', suggested: false },
+      ],
+    },
+    {
+      questionId: 'gap:r1-step-1-heat',
+      fieldPath: 'recipe.r1.step_1.heat',
+      prompt: "The recipe.r1.step_1.heat for recipe 'r1' is missing. Please provide the correct value.",
+      responseType: 'TEXT',
+      required: true,
+      suggestedValue: 'HIGH',
+    },
+    {
+      questionId: 'assumption:r1-text',
+      fieldPath: 'recipe.r1.assumptions',
+      prompt: 'Assumption: Firm tofu substitutes silken tofu. Accept this suggested value?',
+      responseType: 'CHOICE',
+      required: true,
+      options: [
+        { value: 'accept', label: 'Accept suggested value', suggested: true },
+        { value: 'provide_alternative', label: 'Provide an alternative value', suggested: false },
+      ],
+    },
+  ],
+  decisions: [
+    { optionId: 'repair_servings_1_abc', optionType: 'reduce_servings', payload: { servings: 1 }, planRevision: 'p-1:v1' },
+    {
+      optionId: 'repair_purchase_bundle',
+      optionType: 'purchase',
+      payload: { items: [{ ingredient_name: 'Broccoli', quantity: 90, unit: 'g' }, { ingredient_name: 'Canned tomatoes', quantity: 200, unit: 'g' }] },
+      planRevision: 'p-1:v1',
+    },
+  ],
 }
 
+function renderCookingRoutes(initialEntry = `/cooking?selected=${recipeOneId},${recipeTwoId}`) {
+  server.use(http.get(`${origin}/api/v1/recipes`, () => HttpResponse.json(recipePage)))
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+}
+
+describe('cook mode selection page', () => {
+  it('lists backend recipes and sends exact recipe IDs to generate-async', async () => {
+    const user = userEvent.setup()
+    let receivedBody: Record<string, unknown> | null = null
+    server.use(
+      http.post(`${origin}/api/v1/cooking-plans/generate-async`, async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>
+        receivedBody = body
+        expect(request.headers.get('idempotency-key')).toMatch(/[0-9a-f-]{36}/)
+        return HttpResponse.json({ planId, taskId, status: 'PROCESSING', location: `/api/v1/cooking-plans/${planId}/task` }, { status: 202 })
+      }),
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json({ planId, status: 'READY', createdAt: '2026-08-02T10:00:00Z', completedAt: '2026-08-02T10:02:00Z', explanation: 'Done', timeline: [] })),
+    )
+
+    renderCookingRoutes()
+    expect(screen.getByRole('heading', { name: 'What do you want to cook tonight?' })).toBeInTheDocument()
+    expect(await screen.findByText('Scrambled Eggs with Tomato')).toBeInTheDocument()
+    expect(screen.getByText('Corn & Rib Soup')).toBeInTheDocument()
+    expect(screen.getByText(/dishes selected/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /generate plan/i }))
+    expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
+    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId] })
+    expect(receivedBody).not.toHaveProperty('ingredients')
+  })
+})
+
 describe('cooking plan async generation', () => {
-  it('submits async, polls progress, then renders the terminal plan once polling returns 404', async () => {
+  it('polls progress, then renders the terminal READY plan with the execution board', async () => {
     vi.useFakeTimers()
     try {
       let planStatus: 'PROCESSING' | 'READY' = 'PROCESSING'
       let polls = 0
       server.use(
-        http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(references)),
-        http.get(`${origin}/api/v1/cooking-plans/history`, () => HttpResponse.json(emptyHistory)),
         http.post(`${origin}/api/v1/cooking-plans/generate-async`, async ({ request }) => {
           const body = await request.json()
-          expect(body).toHaveProperty('ingredients')
+          expect(body).toMatchObject({ recipeIds: [recipeOneId, recipeTwoId], servings: 4 })
           expect(request.headers.get('idempotency-key')).toMatch(/[0-9a-f-]{36}/)
           return HttpResponse.json({ planId, taskId, status: 'PROCESSING', location: `/api/v1/cooking-plans/${planId}/task` }, { status: 202 })
         }),
@@ -65,8 +176,9 @@ describe('cooking plan async generation', () => {
       )
 
       renderCookingRoutes()
-      fireEvent.change(screen.getByPlaceholderText('e.g. firm tofu'), { target: { value: 'Firm tofu' } })
-      fireEvent.click(screen.getByRole('button', { name: /generate in background/i }))
+      await vi.advanceTimersByTimeAsync(100)
+      expect(screen.getByText('Scrambled Eggs with Tomato')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /generate plan/i }))
 
       // Flush the mutation, navigation, and the first plan/task reads.
       await vi.advanceTimersByTimeAsync(100)
@@ -81,7 +193,7 @@ describe('cooking plan async generation', () => {
       // Third poll returns 404 → stop polling and read the terminal READY plan.
       await vi.advanceTimersByTimeAsync(2000)
       expect(screen.getByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
-      expect(screen.getByText('Boil the soba')).toBeInTheDocument()
+      expect(screen.getAllByText('Boil the soba').length).toBeGreaterThan(0)
       expect(polls).toBe(3)
     } finally {
       vi.useRealTimers()
@@ -91,15 +203,12 @@ describe('cooking plan async generation', () => {
   it('renders a terminal FAILED plan when the async submission itself fails', async () => {
     const user = userEvent.setup()
     server.use(
-      http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(references)),
-      http.get(`${origin}/api/v1/cooking-plans/history`, () => HttpResponse.json(emptyHistory)),
       http.post(`${origin}/api/v1/cooking-plans/generate-async`, () => HttpResponse.json({ planId, status: 'FAILED', errorCode: 'AGENT_UNREACHABLE', errorMessage: 'Cooking agent is unreachable', createdAt: '2026-08-02T10:00:00Z', completedAt: '2026-08-02T10:00:01Z' }, { status: 200 })),
       http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json({ planId, status: 'FAILED', errorCode: 'AGENT_UNREACHABLE', errorMessage: 'Cooking agent is unreachable', createdAt: '2026-08-02T10:00:00Z', completedAt: '2026-08-02T10:00:01Z' })),
     )
 
     renderCookingRoutes()
-    await user.type(await screen.findByPlaceholderText('e.g. firm tofu'), 'Firm tofu')
-    await user.click(screen.getByRole('button', { name: /generate in background/i }))
+    await user.click(screen.getByRole('button', { name: /generate plan/i }))
 
     expect(await screen.findByText('A plan could not be completed')).toBeInTheDocument()
     expect(screen.getByText('Cooking agent is unreachable')).toBeInTheDocument()
@@ -143,63 +252,92 @@ describe('cooking plan async generation', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
   })
+})
 
-  it('keeps the synchronous generate flow working with an idempotency key', async () => {
+describe('confirmation strategy', () => {
+  it('opens a persisted shopping list immediately when purchase is selected', async () => {
     const user = userEvent.setup()
-    let idempotencyKey = ''
-    server.use(
-      http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(references)),
-      http.get(`${origin}/api/v1/cooking-plans/history`, () => HttpResponse.json(emptyHistory)),
-      http.post(`${origin}/api/v1/cooking-plans/generate`, ({ request }) => {
-        idempotencyKey = request.headers.get('idempotency-key') || ''
-        return HttpResponse.json(readyPlan, { status: 201 })
-      }),
-      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)),
-    )
-
-    renderCookingRoutes()
-    await user.type(await screen.findByPlaceholderText('e.g. firm tofu'), 'Firm tofu')
-    await user.click(screen.getByRole('button', { name: /generate cooking plan/i }))
-
-    expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
-    expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/)
-  })
-
-  it('navigates to the new plan returned after confirmation decisions', async () => {
-    const user = userEvent.setup()
-    let submittedBody: unknown
-    const confirmationPlan = {
-      planId,
-      status: 'NEEDS_CONFIRMATION',
-      createdAt: '2026-08-02T10:00:00Z',
-      confirmationQuestions: [{
-        questionId: 'repair:purchase-tofu',
-        fieldPath: 'repair_options',
-        prompt: 'Purchase the missing tofu?',
-        responseType: 'CHOICE',
-        required: false,
-        options: [
-          { value: 'purchase-tofu', label: 'Apply', suggested: true },
-          { value: '__skip__', label: 'Do not apply', suggested: false },
-        ],
-      }],
-    }
-    const decidedPlan = { ...readyPlan, planId: decidedPlanId }
+    const shoppingListId = '00000000-0000-4000-8000-000000000202'
     server.use(
       http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(confirmationPlan)),
-      http.post(`${origin}/api/v1/cooking-plans/${planId}/decisions`, async ({ request }) => {
-        submittedBody = await request.json()
-        expect(request.headers.get('idempotency-key')).toMatch(/[0-9a-f-]{36}/)
-        return HttpResponse.json(decidedPlan, { status: 201 })
-      }),
-      http.get(`${origin}/api/v1/cooking-plans/${decidedPlanId}`, () => HttpResponse.json(decidedPlan)),
+      http.post(`${origin}/api/v1/cooking-plans/${planId}/shopping-list`, () => HttpResponse.json({ shoppingListId, sourcePlanId: planId, rootPlanId: planId, originalServings: 4, status: 'OPEN', checkedItemCount: 0, totalItemCount: 2, createdAt: '2026-08-02T10:00:00Z', updatedAt: '2026-08-02T10:00:00Z', version: 0, items: [] }, { status: 201 })),
     )
 
     renderCookingRoutes(`/cooking/${planId}`)
-    await user.click(await screen.findByRole('radio', { name: /^apply · suggested$/i }))
-    await user.click(screen.getByRole('button', { name: /apply decisions and rebuild plan/i }))
+    expect(await screen.findByRole('heading', { name: 'Your plan needs a decision' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reduce to 1 serving' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Buy missing ingredients' })).toBeInTheDocument()
+    // Gap/assumption detail questions are hidden when a strategy question exists.
+    expect(screen.queryByText(/step_1\.heat.*missing/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Firm tofu substitutes silken tofu/i)).not.toBeInTheDocument()
 
+    await user.click(screen.getByRole('button', { name: 'Buy missing ingredients' }))
+    expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeInTheDocument()
+  })
+
+  it('submits portion reduction asynchronously and rechecks inventory', async () => {
+    const user = userEvent.setup()
+    const childPlanId = '00000000-0000-4000-8000-000000000303'
+    let receivedBody: unknown = null
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(confirmationPlan)),
+      http.post(`${origin}/api/v1/cooking-plans/${planId}/decisions-async`, async ({ request }) => {
+        receivedBody = await request.json()
+        return HttpResponse.json({ ...readyPlan, planId: childPlanId })
+      }),
+      http.get(`${origin}/api/v1/cooking-plans/${childPlanId}`, () => HttpResponse.json({ ...readyPlan, planId: childPlanId })),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+    await user.click(await screen.findByRole('button', { name: 'Reduce to 1 serving' }))
+    await user.click(screen.getByRole('button', { name: 'Reduce portions and recheck' }))
+
+    expect(receivedBody).toEqual([{ questionId: 'repair:strategy', value: 'repair_servings_1_abc' }])
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
-    expect(submittedBody).toEqual([{ questionId: 'repair:purchase-tofu', value: 'purchase-tofu' }])
+  })
+
+  it('automatically opens shopping when one serving is still short', async () => {
+    const shoppingListId = '00000000-0000-4000-8000-000000000404'
+    const purchaseOnly = {
+      ...confirmationPlan,
+      repairOptions: confirmationPlan.repairOptions.filter((option) => option.optionType === 'purchase'),
+      confirmationQuestions: [{ ...confirmationPlan.confirmationQuestions[0], options: [{ value: 'repair_purchase_bundle', label: 'Buy missing ingredients', suggested: true }] }],
+      decisions: confirmationPlan.decisions.filter((decision) => decision.optionType === 'purchase'),
+    }
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(purchaseOnly)),
+      http.post(`${origin}/api/v1/cooking-plans/${planId}/shopping-list`, () => HttpResponse.json({ shoppingListId, sourcePlanId: planId, rootPlanId: planId, originalServings: 4, status: 'OPEN', checkedItemCount: 0, totalItemCount: 2, createdAt: '2026-08-02T10:00:00Z', updatedAt: '2026-08-02T10:00:00Z', version: 0, items: [] }, { status: 201 })),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+    expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeInTheDocument()
+  })
+})
+
+describe('execution board', () => {
+  it('starts an available task, completes it, and unblocks the next one', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+    expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
+
+    // First task is ready to start; the second is blocked behind it.
+    const startLane = screen.getByRole('heading', { name: /ready to start/i }).closest('section')!
+    expect(within(startLane).getByText('Boil the soba')).toBeInTheDocument()
+    expect(screen.getByText(/waiting for boil the soba to finish/i)).toBeInTheDocument()
+
+    // Start the first task → it moves to in progress and can be completed.
+    await user.click(screen.getByRole('button', { name: /start/i }))
+    const progressLane = screen.getByRole('heading', { name: /in progress/i }).closest('section')!
+    expect(within(progressLane).getByText('Boil the soba')).toBeInTheDocument()
+
+    await user.click(within(progressLane).getByRole('button', { name: /complete/i }))
+    expect(screen.getByText('1 of 2 tasks complete')).toBeInTheDocument()
+    // The second task is now ready to start.
+    const nextLane = screen.getByRole('heading', { name: /ready to start/i }).closest('section')!
+    expect(within(nextLane).getByText('Rest and dress')).toBeInTheDocument()
   })
 })

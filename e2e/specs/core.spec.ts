@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { resolve } from 'node:path'
-import { chatSession, cookingPlan, group, mockApi, recommendation } from '../fixtures/api.js'
+import { chatSession, cookingPlan, group, mockApi, recipes, recommendation } from '../fixtures/api.js'
 
 test('returns a direct protected route to sign-in without an authenticated refresh', async ({ page }) => {
   await mockApi(page, { authenticated: false })
@@ -77,8 +77,11 @@ test('all primary destinations render their documented empty or ready state', as
     ['/explore', /^explore$/i],
     ['/saved', /saved for the right moment/i],
     ['/saved/recipes', /recipes you can actually cook/i],
-    ['/cooking', /cook with what you know/i],
-    ['/cooking/recipes', /choose what you want to cook/i],
+    ['/cooking', /what do you want to cook tonight/i],
+    ['/cooking/history', /plans you have generated/i],
+    ['/cooking/settings', /plan preferences/i],
+    ['/inventory', /what is in your kitchen/i],
+    ['/shopping-lists', /your shopping lists/i],
     ['/chat', /ask foodmind/i],
     ['/dashboard', /^dashboard$/i],
     ['/me', /^maya tan$/i],
@@ -100,26 +103,31 @@ test('all primary destinations render their documented empty or ready state', as
   }
 })
 
-test('local recipe selection generates a real backend plan and tracks session progress', async ({ page }) => {
+test('cook mode selection generates a real backend plan and drives the execution board', async ({ page }) => {
   let generateBody: Record<string, unknown> = {}
   let idempotencyKey = ''
   await mockApi(page, { onCookingGenerate: (request) => {
     generateBody = request.postDataJSON() as Record<string, unknown>
     idempotencyKey = request.headers()['idempotency-key'] || ''
   } })
-  await page.goto('/cooking/recipes')
-  await page.getByRole('button', { name: /ginger scallion tofu noodles/i }).click()
+  await page.goto('/cooking')
+  await expect(page.getByRole('heading', { name: /what do you want to cook tonight/i })).toBeVisible()
+  await page.getByRole('button', { name: /tomato eggs/i }).click()
+  await page.getByRole('button', { name: /garlic tofu/i }).click()
   const selectionDock = page.getByRole('region', { name: /selected recipes and plan constraints/i })
-  await expect(selectionDock.getByText('1', { exact: true })).toBeVisible()
-  await expect(selectionDock.getByText('recipe selected', { exact: true })).toBeVisible()
+  await expect(selectionDock.getByText('2', { exact: true })).toBeVisible()
+  await expect(selectionDock.getByText('dishes selected', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /generate plan/i }).click()
 
   await expect(page).toHaveURL(`/cooking/${cookingPlan.planId}`)
-  expect(generateBody).toMatchObject({ servings: 2 })
-  expect((generateBody.ingredients as unknown[]).length).toBeGreaterThan(0)
+  expect(generateBody).toMatchObject({ servings: 4, recipeIds: recipes.map((recipe) => recipe.id) })
+  expect(generateBody).not.toHaveProperty('ingredients')
   expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/)
-  await page.getByRole('button', { name: /mark complete: step 1/i }).click()
-  await expect(page.getByText('1 of 2 steps complete')).toBeVisible()
+
+  // Execution board: start the first task, complete it, then progress updates.
+  await page.getByRole('button', { name: /start/i }).first().click()
+  await page.getByRole('button', { name: /complete/i }).first().click()
+  await expect(page.getByText(/1 of 2 tasks complete/)).toBeVisible()
   await expect(page.getByRole('progressbar', { name: /cooking plan completion/i })).toHaveAttribute('aria-valuenow', '1')
 })
 

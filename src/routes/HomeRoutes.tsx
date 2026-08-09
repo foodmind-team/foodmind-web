@@ -165,7 +165,7 @@ export function HomePage() {
             <button type="button" onClick={() => setShowContext((shown) => !shown)} aria-expanded={showContext}>Edit</button>
           </div>
           <div className="context-grid" aria-label="Current recommendation context">
-            <ContextItem icon={Clock3} label="When" value={values.requestedFor ? new Date(values.requestedFor).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Any time'} />
+            <ContextItem icon={Clock3} label="When" value={values.requestedFor ? new Date(values.requestedFor).toLocaleString('en-SG', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Any time'} />
             <ContextItem icon={MapPin} label="Range" value={values.maxDistanceKm ? `Within ${values.maxDistanceKm} km` : values.area || (values.latitude && values.longitude ? 'Manual coordinates' : 'Any area')} />
             <ContextItem icon={WalletCards} label="Budget" value={values.maxBudget ? `${values.currency} ${values.maxBudget}` : 'Flexible'} />
             <ContextItem icon={Sparkles} label="Hard needs" value={hardConstraints.length ? `${hardConstraints.length} applied` : 'None added'} />
