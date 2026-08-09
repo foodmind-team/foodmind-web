@@ -1,33 +1,35 @@
-import { useFieldArray, useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, Ban, Check, ChefHat, Clock3, Plus, ShoppingBasket, Trash2, Users, WalletCards } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Ban,
+  Check,
+  ChefHat,
+  ListChecks,
+  Settings,
+  Users,
+} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
+import { useToast } from '../components/feedback/ToastProvider'
 import { ApiError, api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
-import { prepareCommand, type PendingCommand } from '../lib/commands'
+import {
+  applyExecutionUpdate,
+  computeExecutionSnapshot,
+  ExecutionConflictError,
+  initExecutionStates,
+  type ExecutionSnapshot,
+  type LocalTaskState,
+} from '../lib/cooking-execution'
 import { formatDateTime, sentenceCase } from '../lib/format'
-
-type CookingForm = {
-  ingredients: Array<{ ingredientName: string; quantity: string; unit: string }>
-  servings: string
-  maxMinutes: string
-  maxBudget: string
-  currency: string
-  requiredDietaryTagCodes: string[]
-  avoidAllergenCodes: string[]
-}
 
 const NODE_LABELS: Record<string, string> = {
   assemble_request: 'Assembling your cooking request…',
   solve_schedule: 'Solving the cooking schedule…',
   validate_result: 'Validating the generated plan…',
   materialise: 'Saving your plan…',
-}
-
-function optionalNumber(value: string) {
-  return value.trim() ? Number(value) : null
 }
 
 function errorStatus(error: unknown) {
@@ -45,72 +47,40 @@ function formatMinute(minute?: number) {
   return `${Math.floor(minute / 60)}:${String(minute % 60).padStart(2, '0')}`
 }
 
-export function CookingPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const command = useRef<PendingCommand | null>(null)
-  const reference = useQuery({ queryKey: queryKeys.catalogue.reference(), staleTime: Infinity, queryFn: async () => dataOrThrow<Schema<'CatalogueReferenceDataResponse'>>(await api.GET('/catalogue/reference-data')) })
-  const history = useQuery({ queryKey: queryKeys.cooking.history(), queryFn: async () => dataOrThrow<Schema<'CookingPlanHistoryResponse'>>(await api.GET('/cooking-plans/history', { params: { query: { page: 0, size: 8 } } })) })
-  const historyItems = (history.data?.items || []) as Schema<'CookingPlanSummary'>[]
-  const { register, control, handleSubmit, setError, formState: { errors } } = useForm<CookingForm>({ defaultValues: { ingredients: [{ ingredientName: '', quantity: '', unit: '' }], servings: '2', maxMinutes: '', maxBudget: '', currency: 'SGD', requiredDietaryTagCodes: [], avoidAllergenCodes: [] } })
-  const ingredients = useFieldArray({ control, name: 'ingredients' })
-  const generate = useMutation({
-    mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/generate', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
-    onSuccess: (plan) => { command.current = null; queryClient.setQueryData(queryKeys.cooking.detail(plan.planId), plan); void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() }); navigate(`/cooking/${plan.planId}`) },
-  })
-  const generateAsync = useMutation({
-    mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow(await api.POST('/cooking-plans/generate-async', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
-    onSuccess: (result) => {
-      command.current = null
-      queryClient.setQueryData(queryKeys.cooking.detail(result.planId), result.status === 'PROCESSING' ? { planId: result.planId, status: 'PROCESSING' as const } : result)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
-      navigate(`/cooking/${result.planId}`)
-    },
-  })
-  const buildBody = (values: CookingForm): Schema<'GenerateCookingPlanRequest'> => {
-    const nonEmpty = values.ingredients.filter((item) => item.ingredientName.trim())
-    return {
-      ingredients: nonEmpty.map((item) => ({ ingredientName: item.ingredientName.trim(), quantity: optionalNumber(item.quantity), unit: item.unit || null, source: 'MANUAL' })),
-      servings: Number(values.servings), maxMinutes: optionalNumber(values.maxMinutes), maxBudget: optionalNumber(values.maxBudget), currency: values.maxBudget ? values.currency.toUpperCase() : null,
-      requiredDietaryTagCodes: values.requiredDietaryTagCodes, avoidAllergenCodes: values.avoidAllergenCodes,
-    }
-  }
-  const requireIngredients = (values: CookingForm) => {
-    if (!values.ingredients.some((item) => item.ingredientName.trim())) { setError('ingredients', { message: 'Add at least one ingredient.' }); return null }
-    return buildBody(values)
-  }
-  const submit = handleSubmit((values) => { const body = requireIngredients(values); if (!body) return; command.current = prepareCommand(command.current, body); generate.mutate({ body, key: command.current.key }) })
-  const submitAsync = handleSubmit((values) => { const body = requireIngredients(values); if (!body) return; command.current = prepareCommand(command.current, body); generateAsync.mutate({ body, key: command.current.key }) })
+type StrategyPurchaseItem = { ingredientName: string; quantity: number | null; unit: string | null }
 
-  return (
-    <div className="page section-page cooking-page">
-      <header className="section-page-heading"><div><p className="eyebrow">Manual ingredients · no pantry claims</p><h1>Cook with what you know you have.</h1><p>Give FoodMind 1–30 ingredients. It will return a structured plan or an honest fallback.</p></div><span className="cooking-mark"><ChefHat /></span></header>
-      <nav className="cooking-path-tabs" aria-label="Cooking input method"><Link to="/cooking/recipes"><ChefHat size={16} /> Choose recipes</Link><Link className="active" to="/cooking"><ShoppingBasket size={16} /> Enter ingredients</Link></nav>
-      <form className="cooking-builder" onSubmit={submit}>
-        <section className="ingredient-panel"><div className="section-topline"><div><p className="eyebrow">Step 1</p><h2>What's available?</h2></div><button className="secondary-action" type="button" disabled={ingredients.fields.length >= 30} onClick={() => ingredients.append({ ingredientName: '', quantity: '', unit: '' })}><Plus size={16} /> Add ingredient</button></div>{errors.ingredients?.message && <div className="form-alert">{errors.ingredients.message}</div>}<div className="ingredient-list">{ingredients.fields.map((field, index) => <div className="ingredient-row" key={field.id}><label><span>Ingredient {index + 1}</span><input placeholder="e.g. firm tofu" {...register(`ingredients.${index}.ingredientName`)} /></label><label><span>Quantity</span><input type="number" min="0" step="0.01" {...register(`ingredients.${index}.quantity`)} /></label><label><span>Unit</span><input placeholder="g, cups…" {...register(`ingredients.${index}.unit`)} /></label><button className="icon-button" type="button" aria-label={`Remove ingredient ${index + 1}`} disabled={ingredients.fields.length === 1} onClick={() => ingredients.remove(index)}><Trash2 size={17} /></button></div>)}</div></section>
-        <section className="cooking-context"><div><p className="eyebrow">Step 2</p><h2>Shape the plan</h2></div><div className="form-grid"><label><Users size={16} /> Servings<input type="number" min="1" max="20" {...register('servings')} /></label><label><Clock3 size={16} /> Maximum minutes<input type="number" min="1" {...register('maxMinutes')} /></label><label><WalletCards size={16} /> Extra budget<input type="number" min="0" step="0.01" {...register('maxBudget')} /></label><label>Currency<input maxLength={3} {...register('currency')} /></label></div><fieldset><legend>Dietary requirements</legend><div className="check-grid">{reference.data?.dietaryTags.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('requiredDietaryTagCodes')} /><span>{item.name}</span></label>)}</div></fieldset><fieldset><legend>Allergens to avoid</legend><div className="check-grid">{reference.data?.allergens.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('avoidAllergenCodes')} /><span>{item.name}</span></label>)}</div></fieldset>{generate.isError && <div className="form-alert" role="alert">{errorMessage(generate.error)}</div>}{generateAsync.isError && <div className="form-alert" role="alert">{errorMessage(generateAsync.error)}</div>}<div className="generate-actions"><button className="generate-button" type="submit" disabled={generate.isPending || generateAsync.isPending}>{generate.isPending ? 'Building your plan…' : <><ChefHat size={19} /> Generate cooking plan <ArrowRight size={17} /></>}</button><button className="secondary-action" type="button" disabled={generate.isPending || generateAsync.isPending} onClick={submitAsync}>{generateAsync.isPending ? 'Submitting…' : <><Clock3 size={16} /> Generate in background</>}</button></div></section>
-      </form>
-      <section className="history-strip"><div className="section-topline"><div><p className="eyebrow">Recent plans</p><h2>Cooking history</h2></div></div>{history.isLoading && <LoadingState label="Loading cooking history…" />}{history.isError && <ErrorState error={history.error} onRetry={() => void history.refetch()} />}{history.isSuccess && !historyItems.length && <EmptyState title="No cooking plans yet" message="Your first generated plan will appear here." />}<div className="mini-card-grid">{historyItems.map((plan) => <Link className="mini-card" to={`/cooking/${plan.planId}`} key={plan.planId}><span><ChefHat /></span><div><p className="eyebrow">{sentenceCase(plan.status)}</p><h3>{plan.sourceCount || 0} sources · {plan.taskCount || 0} tasks</h3><small>{formatDateTime(plan.createdAt)}</small></div><ArrowRight size={16} /></Link>)}</div></section>
-    </div>
-  )
+function strategyPurchaseItems(data: Schema<'CookingPlanResponse'>): StrategyPurchaseItem[] {
+  const purchaseDecision = data.decisions?.find((decision) => decision.optionType === 'purchase')
+  const items = purchaseDecision?.payload && typeof purchaseDecision.payload === 'object' && 'items' in purchaseDecision.payload
+    ? purchaseDecision.payload.items
+    : undefined
+  if (!Array.isArray(items)) return []
+  return items
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      ingredientName: typeof item.ingredient_name === 'string' ? item.ingredient_name : 'Ingredient',
+      quantity: typeof item.quantity === 'number' ? item.quantity : null,
+      unit: typeof item.unit === 'string' ? item.unit : null,
+    }))
 }
 
+function strategyReduceServings(data: Schema<'CookingPlanResponse'>) {
+  const decision = data.decisions?.find((entry) => entry.optionType === 'reduce_servings')
+  const servings = decision?.payload && typeof decision.payload === 'object' && 'servings' in decision.payload
+    ? decision.payload.servings
+    : undefined
+  return typeof servings === 'number' ? servings : null
+}
 export function CookingDetailPage() {
   const { planId = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const progressKey = `foodmind.cooking-tasks.v1:${planId}`
-  const [completedTasks, setCompletedTasks] = useState<Set<string>>(() => {
-    try {
-      const stored = window.sessionStorage.getItem(progressKey)
-      return new Set(stored ? JSON.parse(stored) as string[] : [])
-    } catch { return new Set() }
-  })
-  useEffect(() => {
-    try { window.sessionStorage.setItem(progressKey, JSON.stringify([...completedTasks])) } catch { /* execution progress remains optional session state */ }
-  }, [completedTasks, progressKey])
-  const plan = useQuery({ queryKey: queryKeys.cooking.detail(planId), queryFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.GET('/cooking-plans/{planId}', { params: { path: { planId } } })) })
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const plan = useQuery({
+    queryKey: queryKeys.cooking.detail(planId),
+    queryFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.GET('/cooking-plans/{planId}', { params: { path: { planId } } })),
+    refetchInterval: (query) => query.state.data?.status === 'PROCESSING' ? 2000 : false,
+  })
   const isProcessing = plan.data?.status === 'PROCESSING'
   const task = useQuery({
     queryKey: queryKeys.cooking.task(planId),
@@ -131,8 +101,16 @@ export function CookingDetailPage() {
     onSuccess: (result) => { queryClient.setQueryData(queryKeys.cooking.detail(planId), result); void plan.refetch() },
     onError: (error) => { if (errorStatus(error) === 409) void plan.refetch() },
   })
+  const createShoppingList = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'ShoppingListResponse'>>(await api.POST('/cooking-plans/{planId}/shopping-list', { params: { path: { planId } } })),
+    onSuccess: (shoppingList) => {
+      queryClient.setQueryData(queryKeys.shopping.detail(shoppingList.shoppingListId), shoppingList)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.shopping.list() })
+      navigate(`/shopping-lists/${shoppingList.shoppingListId}`)
+    },
+  })
   const submitDecisions = useMutation({
-    mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/decisions', {
+    mutationFn: async () => dataOrThrow(await api.POST('/cooking-plans/{planId}/decisions-async', {
       params: { path: { planId }, header: { 'Idempotency-Key': crypto.randomUUID() } },
       body: Object.entries(answers).map(([questionId, value]) => ({ questionId, value })),
     })),
@@ -142,6 +120,18 @@ export function CookingDetailPage() {
       navigate(`/cooking/${result.planId}`)
     },
   })
+  const autoShoppingPlan = useRef<string | null>(null)
+  useEffect(() => {
+    const data = plan.data
+    if (data?.status !== 'NEEDS_CONFIRMATION' || autoShoppingPlan.current === data.planId) return
+    const hasPurchase = data.decisions?.some((decision) => decision.optionType === 'purchase')
+    const hasReduction = data.decisions?.some((decision) => decision.optionType === 'reduce_servings')
+    if (hasPurchase && !hasReduction) {
+      autoShoppingPlan.current = data.planId
+      createShoppingList.mutate()
+    }
+  }, [plan.data, createShoppingList])
+
   if (plan.isLoading) return <div className="page"><LoadingState label="Opening your cooking plan…" /></div>
   if (plan.isError) return <div className="page"><ErrorState error={plan.error} onRetry={() => void plan.refetch()} /></div>
   const data = plan.data!
@@ -162,7 +152,7 @@ export function CookingDetailPage() {
     return (
       <div className="page section-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
-        <EmptyState title={cancelled ? 'Cooking plan cancelled' : 'A plan could not be completed'} message={cancelled ? 'You cancelled this generation before it finished. Nothing was saved.' : (data.errorMessage || sentenceCase(data.errorCode || 'FAILED'))} action={<Link className="primary-action" to="/cooking">Edit ingredients</Link>} />
+        <EmptyState title={cancelled ? 'Cooking plan cancelled' : 'A plan could not be completed'} message={cancelled ? 'You cancelled this generation before it finished. Nothing was saved.' : (data.errorMessage || sentenceCase(data.errorCode || 'FAILED'))} action={<Link className="primary-action" to="/cooking">Choose recipes</Link>} />
       </div>
     )
   }
@@ -173,41 +163,169 @@ export function CookingDetailPage() {
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.completedAt)}</p><h1>No feasible cooking plan</h1><p>{data.explanation || 'Your constraints could not all be met. Review the reasons and adjust the inputs.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
         {data.reasons && data.reasons.length > 0 && <section className="warning-list"><p className="eyebrow">Why it did not fit</p><h2>Reasons</h2>{data.reasons.map((reason, index) => <div key={index}><p>{reason}</p></div>)}</section>}
         {data.safeAlternatives && data.safeAlternatives.length > 0 && <section className="detail-card"><p className="eyebrow">Safe alternatives</p><h2>You could still cook</h2><ul className="cooking-steps">{data.safeAlternatives.map((item, index) => <li key={index}><p>{item}</p></li>)}</ul></section>}
-        <Link className="primary-action" to="/cooking">Edit ingredients</Link>
+        <Link className="primary-action" to="/cooking">Choose recipes</Link>
       </div>
     )
   }
   if (data.status === 'NEEDS_CONFIRMATION') {
     const questions = data.confirmationQuestions || []
-    const requiredMissing = questions.some((question) => question.required && !answers[question.questionId || ''])
+    const strategyQuestion = questions.find((question) => question.fieldPath === 'repair_strategy' && question.questionId)
+    // When a strategy question exists, the user chooses exactly one
+    // inventory recovery path: reduce portions or buy the missing items.
+    const remainingQuestions = strategyQuestion ? [] : questions
+    const reduceServings = strategyReduceServings(data)
+    // Only the questions actually rendered gate the submit button: when a
+    // strategy question exists, gap/assumption questions are hidden and
+    // don't block submission.
+    const gatingQuestions = strategyQuestion ? [strategyQuestion] : questions
+    const requiredMissing = gatingQuestions.some((question) => question.required && !answers[question.questionId || ''])
+    const onlyPurchase = data.decisions?.some((decision) => decision.optionType === 'purchase') && reduceServings == null
+    if (onlyPurchase && createShoppingList.isPending) return <div className="page"><LoadingState label="Opening your shopping list…" /></div>
     return (
       <div className="page section-page cooking-result-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.createdAt)}</p><h1>Your plan needs a decision</h1><p>{data.explanation || 'The Cooking Agent produced a plan but needs a few answers before it can finish.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
-        {questions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
+        {strategyQuestion && <section className="detail-card"><p className="eyebrow">Inventory shortage</p><h2>{strategyQuestion.prompt}</h2><p>Reducing portions triggers a fresh inventory check. Buying opens a persisted list immediately.</p><div className="strategy-actions">{strategyQuestion.options?.map((option) => { const optionType = data.decisions?.find((decision) => decision.optionId === option.value)?.optionType; const buying = optionType === 'purchase'; return <button className={!buying && answers[strategyQuestion.questionId || ''] === option.value ? 'primary-action' : 'secondary-action'} type="button" disabled={createShoppingList.isPending || submitDecisions.isPending} key={option.value} onClick={() => { if (buying) createShoppingList.mutate(); else if (strategyQuestion.questionId) setAnswers((current) => ({ ...current, [strategyQuestion.questionId!]: option.value || '' })) }}>{buying && createShoppingList.isPending ? 'Opening shopping list…' : option.label}</button> })}</div>{reduceServings != null && <p className="field-note">Reduce servings: recheck the plan at {reduceServings} {reduceServings === 1 ? 'serving' : 'servings'}. If stock is still short, FoodMind opens a shopping list for the original servings.</p>}<small>{strategyQuestion.required ? 'Choose one option' : 'Optional'}</small></section>}
+        {remainingQuestions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
         {!questions.length && <EmptyState title="Awaiting confirmation" message="This plan is waiting for decisions that are not available on this device yet." />}
-        {submitDecisions.isError && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error)}</div>}
-        {questions.length > 0 && <button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Updating plan…' : 'Confirm and continue'}</button>}
+        {(submitDecisions.isError || createShoppingList.isError) && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error || createShoppingList.error)}</div>}
+        {questions.length > 0 && !onlyPurchase && <button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Rechecking inventory…' : 'Reduce portions and recheck'}</button>}
       </div>
     )
   }
-  const tasks = [...(data.timeline || [])].sort((a, b) => (a.startMinute || 0) - (b.startMinute || 0))
+  return <ReadyPlanBoard data={data} />
+}
+
+function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
+  const { showToast } = useToast()
+  const tasks = useMemo(() => [...(data.timeline || [])].sort((a, b) => (a.startMinute || 0) - (b.startMinute || 0)), [data.timeline])
+  const purchaseItems = strategyPurchaseItems(data)
+  const timelineKey = tasks.map((task) => task.taskId || 'x').join('|')
+  const [execStates, setExecStates] = useState<Record<string, LocalTaskState>>(() => initExecutionStates(tasks))
+  const [execEventId, setExecEventId] = useState(0)
+  useEffect(() => {
+    setExecStates(initExecutionStates(tasks))
+    setExecEventId(0)
+  }, [timelineKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const snapshot = useMemo<ExecutionSnapshot>(() => computeExecutionSnapshot(tasks, execStates, execEventId), [tasks, execStates, execEventId])
+  const total = tasks.length
+  const done = snapshot.completed.length
+  const percent = total ? Math.round(done / total * 100) : 0
+
+  const submit = (taskId: string, status: 'IN_PROGRESS' | 'COMPLETED') => {
+    try {
+      const next = applyExecutionUpdate(tasks, execStates, execEventId, { cookingTaskId: taskId, status, expectedEventId: snapshot.expectedEventId })
+      setExecStates(next.states)
+      setExecEventId(next.eventId)
+    } catch (error) {
+      if (error instanceof ExecutionConflictError) {
+        showToast('Execution state changed elsewhere. Refreshing the board…', 'error')
+      } else {
+        showToast((error as Error).message || 'That step is not available yet.', 'error')
+      }
+    }
+  }
+
   return (
     <div className="page section-page cooking-result-page">
       <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
       <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.completedAt)}</p><h1>Your FoodMind cooking plan</h1><p>{data.explanation || `${tasks.length} ordered tasks across the dishes you picked.`}</p></div><span className="cooking-mark"><ChefHat /></span></header>
       {data.solverStatus && <p className="field-note">Solver {sentenceCase(data.solverStatus)}{data.makespanMinutes != null ? ` · ${data.makespanMinutes} minute makespan` : ''}{data.region ? ` · region ${data.region}` : ''}</p>}
-      <section className="cooking-progress-card"><div><p className="eyebrow">Session progress</p><h2>{completedTasks.size} of {tasks.length} tasks complete</h2></div><strong>{tasks.length ? Math.round(completedTasks.size / tasks.length * 100) : 0}%</strong><div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan completion" aria-valuemin={0} aria-valuemax={tasks.length} aria-valuenow={completedTasks.size}><span style={{ width: `${tasks.length ? completedTasks.size / tasks.length * 100 : 0}%` }} /></div>{completedTasks.size > 0 && <button className="text-button" type="button" onClick={() => setCompletedTasks(new Set())}>Reset progress</button>}<small>Checkmarks stay in this browser session and do not claim backend completion or inventory changes.</small></section>
-      <div className="cooking-result-grid">
-        <section className="detail-card"><p className="eyebrow">Dishes</p><h2>Use what is available. Note what to buy.</h2><div className="ingredient-result-list">{data.sources && data.sources.map((source, index) => <div className="ingredient-result" key={`${source.sequenceNo}-${index}`}><span className={source.sourceType === 'OWNER' ? 'to-buy' : 'available'}>{source.sourceType === 'OWNER' ? <Users size={15} /> : <Check size={15} />}{sentenceCase(source.sourceType)}</span><strong>{source.dishName || 'Source dish'}</strong><small>{source.targetServings != null ? `${source.targetServings} servings` : ''}</small></div>)}</div></section>
-        <section className="detail-card steps-card"><p className="eyebrow">Ordered method</p><h2>Cook step by step.</h2><ol className="cooking-steps interactive-steps">{tasks.map((taskItem, index) => { const taskId = taskItem.taskId || `${index}`; const done = completedTasks.has(taskId); return <li className={done ? 'complete' : ''} key={`${taskItem.taskId}-${index}`}><button type="button" aria-pressed={done} aria-label={`${done ? 'Mark incomplete' : 'Mark complete'}: ${taskItem.instruction || `task ${index + 1}`}`} onClick={() => setCompletedTasks((current) => { const next = new Set(current); if (!next.delete(taskId)) next.add(taskId); return next })}>{done ? <Check size={17} /> : index + 1}</button><p>{taskItem.instruction}</p>{taskItem.durationMinutes != null && <small>{taskItem.durationMinutes} min · starts {formatMinute(taskItem.startMinute)}{taskItem.workMode === 'PASSIVE' ? ' · passive' : ''}</small>}</li> })}</ol></section>
+
+      <section className="cooking-progress-card"><div><p className="eyebrow">Execution progress</p><h2>{done} of {total} tasks complete</h2></div><strong>{percent}%</strong><div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan completion" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}><span style={{ width: `${percent}%` }} /></div>{done > 0 && <button className="text-button" type="button" onClick={() => { setExecStates(initExecutionStates(tasks)); setExecEventId(0) }}>Reset progress</button>}<small>The board is simulated on this device; it does not claim backend completion or inventory changes.</small></section>
+
+      <div className="execution-lanes">
+        {snapshot.inProgress.length > 0 && <ExecutionLane title="In progress" tone="progress" tasks={snapshot.inProgress} action={(task) => <button className="lane-action" type="button" onClick={() => submit(task.taskId || '', 'COMPLETED')}><Check size={15} /> Complete</button>} />}
+        {snapshot.available.length > 0 && <ExecutionLane title="Ready to start" tone="available" tasks={snapshot.available} action={(task) => <button className="lane-action" type="button" onClick={() => submit(task.taskId || '', 'IN_PROGRESS')}><ArrowRight size={15} /> Start</button>} />}
+        {snapshot.blocked.length > 0 && <ExecutionLane title="Blocked" tone="blocked" tasks={snapshot.blocked} blocked />}
+        {snapshot.completed.length > 0 && <ExecutionLane title="Completed" tone="done" tasks={snapshot.completed} completed />}
       </div>
+
+      {total > 0 && <details className="detail-card all-steps-details"><summary><p className="eyebrow">Ordered method</p><h2>All steps</h2></summary><ol className="cooking-steps">{tasks.map((taskItem, index) => { const taskId = taskItem.taskId || `task-${index}`; const state = execStates[taskId] || 'PENDING'; return <li className={state === 'COMPLETED' ? 'complete' : ''} key={`${taskItem.taskId}-${index}`}><span className={`step-badge ${state.toLowerCase()}`} aria-label={sentenceCase(state)}>{state === 'COMPLETED' ? <Check size={14} /> : index + 1}</span><p>{taskItem.instruction}</p>{taskItem.durationMinutes != null && <small>{taskItem.durationMinutes} min · starts {formatMinute(taskItem.startMinute)}{taskItem.workMode === 'PASSIVE' ? ' · passive' : ''}</small>}</li> })}</ol></details>}
+
       {data.miseEnPlace && data.miseEnPlace.length > 0 && <section className="detail-card"><p className="eyebrow">Mise en place</p><h2>Prep before cooking.</h2><ul className="cooking-steps">{data.miseEnPlace.map((item, index) => <li key={`${item.sequenceNo}-${index}`}><p>{item.instruction}</p><small>{[item.ingredient, item.operation, item.durationMinutes != null ? `${item.durationMinutes} min` : null, item.whenNeeded].filter(Boolean).join(' · ')}</small></li>)}</ul></section>}
-      {data.dishCompletions && data.dishCompletions.length > 0 && <section className="detail-card"><p className="eyebrow">Completion</p><h2>When each dish is ready.</h2><div className="ingredient-result-list">{data.dishCompletions.map((dish, index) => <div className="ingredient-result" key={index}><span className={dish.isShared ? 'to-buy' : 'available'}>{dish.isShared ? <Users size={15} /> : <Check size={15} />}{dish.isShared ? 'Shared' : 'Solo'}</span><strong>{dish.dishId || 'Dish'}</strong><small>{formatMinute(dish.completionMinute)}{dish.taskCount != null ? ` · ${dish.taskCount} tasks` : ''}</small></div>)}</div></section>}
       {data.completionChecklist && data.completionChecklist.length > 0 && <section className="detail-card"><p className="eyebrow">Checklist</p><h2>What to buy and portion.</h2><ul className="cooking-steps">{data.completionChecklist.map((item, index) => <li key={`${item.completionItemId}-${index}`}><p>{item.ingredientName || 'Ingredient'}</p><small>{item.allocations && item.allocations.length ? item.allocations.map((allocation) => `${allocation.quantity} ${allocation.unit || ''}`).join(', ') : 'No lot allocated'}</small></li>)}</ul></section>}
+      {purchaseItems.length > 0 && <section className="detail-card"><p className="eyebrow">Shopping list</p><h2>Missing ingredients to buy.</h2><ul className="cooking-steps">{purchaseItems.map((item) => <li key={`${item.ingredientName}-${item.unit || 'unit'}`}><p>{item.ingredientName}</p><small>{item.quantity != null ? `${item.quantity} ${item.unit || ''}`.trim() : (item.unit || 'As needed')}</small></li>)}</ul></section>}
+      {data.dishCompletions && data.dishCompletions.length > 0 && <section className="detail-card"><p className="eyebrow">Completion</p><h2>When each dish is ready.</h2><div className="ingredient-result-list">{data.dishCompletions.map((dish, index) => <div className="ingredient-result" key={index}><span className={dish.isShared ? 'to-buy' : 'available'}>{dish.isShared ? <Users size={15} /> : <Check size={15} />}{dish.isShared ? 'Shared' : 'Solo'}</span><strong>{dish.dishId || 'Dish'}</strong><small>{formatMinute(dish.completionMinute)}{dish.taskCount != null ? ` · ${dish.taskCount} tasks` : ''}</small></div>)}</div></section>}
       {data.assumptions && data.assumptions.length > 0 && <section className="warning-list"><p className="eyebrow">Plan notes</p><h2>Assumptions used</h2>{data.assumptions.map((assumption, index) => <div key={index}><strong>{assumption.sourceType ? sentenceCase(assumption.sourceType) : 'Assumption'}</strong><p>{assumption.text}</p></div>)}</section>}
-      {data.repairOptions && data.repairOptions.length > 0 && <section className="warning-list"><p className="eyebrow">Plan notes</p><h2>Repair options</h2>{data.repairOptions.map((option, index) => <div key={`${option.optionId}-${index}`}><strong>{sentenceCase(option.optionType || 'Option')}</strong><p>{option.description}</p></div>)}</section>}
-      <p className="field-note">The current backend response does not expose a recipe title or a per-serving summary beyond what is shown. FoodMind renders only the structured plan fields it actually returned.</p>
+    </div>
+  )
+}
+
+function ExecutionLane({ title, tone, tasks, action, blocked, completed }: {
+  title: string
+  tone: string
+  tasks: Array<Schema<'CookingPlanTimelineTask'> & { reason?: string }>
+  action?: (task: Schema<'CookingPlanTimelineTask'>) => React.ReactNode
+  blocked?: boolean
+  completed?: boolean
+}) {
+  return (
+    <section className={`execution-lane ${tone}`}>
+      <div className="lane-head"><span className="lane-dot" /><h3>{title} <small>{tasks.length}</small></h3></div>
+      <div className="lane-list">
+        {tasks.map((task, index) => (
+          <div className={`task-card${blocked ? ' block' : ''}${completed ? ' done' : ''}`} key={`${task.taskId}-${index}`}>
+            <p>{task.instruction}</p>
+            {task.durationMinutes != null && <small>{task.durationMinutes} min · starts {formatMinute(task.startMinute)}{task.workMode === 'PASSIVE' ? ' · passive' : ''}</small>}
+            {task.reason && <small className="block-reason">{task.reason}</small>}
+            {action && action(task)}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// History page — real /cooking-plans/history endpoint (cooking-app PlansHistory).
+// ---------------------------------------------------------------------------
+
+export function CookingHistoryPage() {
+  const history = useQuery({ queryKey: queryKeys.cooking.history(), queryFn: async () => dataOrThrow<Schema<'CookingPlanHistoryResponse'>>(await api.GET('/cooking-plans/history', { params: { query: { page: 0, size: 20 } } })) })
+  const items = (history.data?.items || []) as Schema<'CookingPlanSummary'>[]
+  return (
+    <div className="page section-page">
+      <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
+      <header className="section-page-heading"><div><p className="eyebrow">Cooking history</p><h1>Plans you have generated.</h1><p>Every cooking plan that the backend accepted for this account, newest first.</p></div><span className="cooking-mark"><ListChecks /></span></header>
+      {history.isLoading && <LoadingState label="Loading cooking history…" />}
+      {history.isError && <ErrorState error={history.error} onRetry={() => void history.refetch()} />}
+      {history.isSuccess && !items.length && <EmptyState title="No cooking plans yet" message="Generate your first plan from the recipe selection page." action={<Link className="primary-action" to="/cooking">Choose recipes</Link>} />}
+      {items.length > 0 && <section className="history-strip"><div className="mini-card-grid">{items.map((plan) => <Link className="mini-card" to={`/cooking/${plan.planId}`} key={plan.planId}><span><ChefHat /></span><div><p className="eyebrow">{sentenceCase(plan.status || '')}</p><h3>{plan.sourceCount || 0} sources · {plan.taskCount || 0} tasks</h3><small>{formatDateTime(plan.createdAt)}</small></div><ArrowRight size={16} /></Link>)}</div></section>}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Settings page — region / dietary / allergen preferences + scenario help
+// (cooking-app SettingsPage, adapted to real reference data).
+// ---------------------------------------------------------------------------
+
+export function CookingSettingsPage() {
+  const reference = useQuery({ queryKey: queryKeys.catalogue.reference(), staleTime: Infinity, queryFn: async () => dataOrThrow<Schema<'CatalogueReferenceDataResponse'>>(await api.GET('/catalogue/reference-data')) })
+  const [region, setRegion] = useState('SG')
+  const [dietary, setDietary] = useState<Set<string>>(new Set())
+  const [allergens, setAllergens] = useState<Set<string>>(new Set())
+  const REGIONS = [{ code: 'SG', name: 'Singapore' }, { code: 'US', name: 'United States' }, { code: 'CN', name: 'Mainland China' }]
+  const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) => setter((current) => {
+    const next = new Set(current)
+    if (!next.delete(value)) next.add(value)
+    return next
+  })
+  return (
+    <div className="page section-page">
+      <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
+      <header className="section-page-heading"><div><p className="eyebrow">Cook preferences</p><h1>Plan preferences.</h1><p>Reference data comes from the backend catalogue. Preferences shape the demo scenarios you can try.</p></div><span className="cooking-mark"><Settings /></span></header>
+      <section className="detail-card"><p className="eyebrow">Region</p><h2>Where are you cooking?</h2><div className="settings-chips">{REGIONS.map((item) => <button className={region === item.code ? 'active' : ''} type="button" onClick={() => setRegion(item.code)} key={item.code}>{item.name}</button>)}</div></section>
+      <section className="detail-card"><p className="eyebrow">Dietary requirements</p><h2>Tags to honour when the backend can.</h2>{reference.isLoading ? <LoadingState label="Loading reference data…" /> : <div className="settings-chips">{(reference.data?.dietaryTags || []).map((item) => <button className={dietary.has(item.code) ? 'active' : ''} type="button" onClick={() => toggle(setDietary, item.code)} key={item.code}>{item.name}</button>)}</div>}</section>
+      <section className="detail-card"><p className="eyebrow">Allergens to avoid</p><h2>Flags to pass along as constraints.</h2><div className="settings-chips">{(reference.data?.allergens || []).map((item) => <button className={allergens.has(item.code) ? 'active' : ''} type="button" onClick={() => toggle(setAllergens, item.code)} key={item.code}>{item.name}</button>)}</div></section>
+      <section className="warning-list"><p className="eyebrow">How to trigger each outcome</p><h2>Demo scenarios</h2>
+        <div><strong>Ready</strong><p>Select two quick dishes and generate a plan with no time pressure.</p></div>
+        <div><strong>Needs confirmation</strong><p>Select a dish whose pantry line runs short; the backend asks how to proceed.</p></div>
+        <div><strong>Infeasible</strong><p>Select the slow soup and set a time limit below its cooking span.</p></div>
+        <div><strong>Failed</strong><p>Ask the backend with constraints it cannot honour; it returns a retryable failure.</p></div>
+      </section>
     </div>
   )
 }

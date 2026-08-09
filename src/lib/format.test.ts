@@ -14,6 +14,10 @@ describe('format helpers', () => {
     expect(sentenceCase(null)).toBe('Not provided')
   })
 
+  it('uses an English locale for product timestamps', () => {
+    expect(formatDateTime('2026-08-09T08:00:00Z')).toMatch(/[A-Za-z]/)
+  })
+
   it('creates a local datetime input value', () => {
     expect(toLocalDateTimeValue('2026-07-31T12:00:00Z')).toMatch(/^2026-07-31T/)
     expect(toLocalDateTimeValue()).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)

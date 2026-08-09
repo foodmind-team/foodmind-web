@@ -24,13 +24,21 @@ const drinkRecord = { id: id('32'), drinkName: 'Iced matcha latte', shopNameSnap
 export const chatSession = { id: id('41'), title: 'Food history helper', status: 'ACTIVE', createdAt: now, updatedAt: now }
 const chatAssistant = { id: id('42'), sessionId: chatSession.id, role: 'ASSISTANT', content: 'Your recent favourites are grounded in the FoodMind sources shown below.', route: 'SUMMARY', responseStatus: 'SUCCEEDED', correlationId: id('43'), agentTraceId: 'agent-e2e', createdAt: now, sources: [] }
 export const cookingPlan = {
-  planId: id('61'), traceId: 'trace-cooking-e2e', status: 'SUCCEEDED', sourceRecipeId: null,
-  fallbackStatus: 'NOT_REQUIRED', fallbackVersion: null, failureCode: null, createdAt: now, completedAt: now,
-  inputs: [{ ingredientName: 'firm tofu', quantity: 300, unit: 'g', source: 'MANUAL' }],
-  ingredients: [{ sequenceNo: 1, ingredientName: 'firm tofu', quantity: 300, unit: 'g', availability: 'AVAILABLE' }],
-  steps: [{ stepNo: 1, instruction: 'Sear the tofu until golden.' }, { stepNo: 2, instruction: 'Toss with the cooked noodles.' }],
-  warnings: [],
+  planId: id('61'), status: 'READY', createdAt: now, completedAt: now,
+  solverStatus: 'OPTIMAL', makespanMinutes: 54, region: 'SG',
+  explanation: 'A balanced weeknight dinner.',
+  timeline: [
+    { taskId: 'task-1', instruction: 'Sear the tofu until golden', startMinute: 0, endMinute: 8, durationMinutes: 8, workMode: 'ACTIVE' },
+    { taskId: 'task-2', instruction: 'Toss with the cooked noodles', startMinute: 8, endMinute: 12, durationMinutes: 4, workMode: 'PASSIVE' },
+  ],
+  miseEnPlace: [{ sequenceNo: 1, instruction: 'Wash the greens' }],
+  completionChecklist: [{ completionItemId: 'c-1', ingredientName: 'Soba', allocations: [{ inventoryLotId: 'lot-1', quantity: 2, unit: 'portions' }] }],
+  assumptions: [{ text: 'Firm tofu substitutes silken tofu.', sourceType: 'pantry' }],
 }
+export const recipes = [
+  { id: id('71'), name: 'Tomato eggs', servings: 2, imageUrl: null, tags: ['Weeknight'], allergenHints: ['EGG'], ingredients: ['3 eggs', '200 g tomatoes'], steps: ['Cook the eggs.'], createdAt: now, updatedAt: now, version: 0 },
+  { id: id('72'), name: 'Garlic tofu', servings: 4, imageUrl: null, tags: ['Quick'], allergenHints: ['SOY'], ingredients: ['400 g firm tofu', '20 g garlic'], steps: ['Sear the tofu.'], createdAt: now, updatedAt: now, version: 0 },
+]
 const mediaAssetId = id('51')
 const metrics = [
   { code: 'FOOD_COUNT', label: 'Food records', period: '2026-07-13', value: 5, unit: 'COUNT', empty: false },
@@ -118,6 +126,10 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === '/search' && method === 'GET') return fulfill(route, { items: [], nextCursor: null, page: 0, size: 18, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/want-to-try' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 24, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/cooking-plans/history' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 8, totalElements: 0, totalPages: 0, hasNext: false })
+    if (path === '/recipes' && method === 'GET') return fulfill(route, { items: recipes, page: 0, size: 100, totalItems: recipes.length, totalPages: 1, hasNext: false })
+    if (path === '/inventory/lots' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 100, totalItems: 0, totalPages: 0, hasNext: false })
+    if (path === '/shopping-lists' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 100, totalItems: 0, totalPages: 0, hasNext: false })
+    if (path === '/cooking-plans/generate-async' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, { planId: cookingPlan.planId, taskId: 'task-e2e', status: 'PROCESSING', location: `/api/v1/cooking-plans/${cookingPlan.planId}/task` }, 202) }
     if (path === '/cooking-plans/generate' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, cookingPlan) }
     if (path === `/cooking-plans/${cookingPlan.planId}` && method === 'GET') return fulfill(route, cookingPlan)
     if (path === '/chat/sessions' && method === 'GET') return fulfill(route, { items: [chatSession], page: 0, size: 50, totalElements: 1, totalPages: 1, hasNext: false })

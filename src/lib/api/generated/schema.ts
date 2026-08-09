@@ -602,6 +602,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cooking-plans/{planId}/decisions-async": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit decisions and asynchronously revalidate a cooking plan.
+         * @description Validates answers against the persisted confirmation form and returns an async child plan. Inventory purchase is an external Shopping List flow and is never accepted as fabricated Agent inventory.
+         */
+        post: operations["submitCookingPlanDecisionsAsync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cooking-plans/history": {
         parameters: {
             query?: never;
@@ -676,6 +696,208 @@ export interface paths {
          * @description Cancels the agent task and materialises the plan as FAILED(TASK_CANCELLED). Conflicts (409) when the plan is not a PROCESSING async task.
          */
         post: operations["cancelCookingPlanTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/{planId}/shopping-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Persist the shopping list for a cooking-plan shortage.
+         * @description Idempotently creates an owner-scoped list from the original root plan purchase decision. When a reduced child still lacks stock, quantities remain based on the original servings.
+         */
+        post: operations["getOrCreateCookingPlanShoppingList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inventory/lots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active inventory lots for the authenticated user. */
+        get: operations["listInventoryLots"];
+        put?: never;
+        /** Add a real inventory lot. */
+        post: operations["createInventoryLot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inventory/lots/{lotId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an active owned inventory lot. */
+        get: operations["getInventoryLot"];
+        /** Replace an inventory lot using optimistic locking. */
+        put: operations["updateInventoryLot"];
+        post?: never;
+        /** Archive an inventory lot using optimistic locking. */
+        delete: operations["archiveInventoryLot"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shopping-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List persisted shopping lists for the authenticated user. */
+        get: operations["listShoppingLists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shopping-lists/{shoppingListId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a persisted shopping list. */
+        get: operations["getShoppingList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shopping-lists/{shoppingListId}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Persist purchased quantity, unit, expiry and checked state.
+         * @description If-Match is the current shopping-list item version returned in the item payload.
+         */
+        patch: operations["updateShoppingListItem"];
+        trace?: never;
+    };
+    "/shopping-lists/{shoppingListId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit checked purchases to inventory and asynchronously continue the original plan.
+         * @description Requires every item to be checked. Inventory creation is atomic and exactly-once for the list; the original root servings are then revalidated against real inventory.
+         */
+        post: operations["completeShoppingList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse an English text containing one or more recipes.
+         * @description Persists an owner-scoped import session and returns structured Agent follow-up questions when required recipe facts are missing.
+         */
+        post: operations["createRecipeImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe-imports/{importId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an owner-scoped persisted recipe-import session. */
+        get: operations["getRecipeImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe-imports/{importId}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer the current structured Agent follow-up questions. */
+        post: operations["answerRecipeImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recipe-imports/{importId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Atomically save every ready draft as an owned Backend Recipe. */
+        post: operations["confirmRecipeImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4030,6 +4252,136 @@ export interface components {
             syncState: "PENDING" | "POLLING";
             progress?: components["schemas"]["CookingPlanTaskProgressResponse"];
         };
+        InventoryLotRequest: {
+            ingredientName: string;
+            quantity: number;
+            unit: string;
+            /** Format: date */
+            expiryDate?: string | null;
+        };
+        InventoryLotResponse: {
+            /** Format: uuid */
+            lotId: string;
+            ingredientName: string;
+            quantity: number;
+            reserved: number;
+            available: number;
+            unit: string;
+            /** Format: date */
+            expiryDate?: string | null;
+            /** Format: date-time */
+            purchasedAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int64 */
+            version: number;
+        };
+        InventoryLotPageResponse: components["schemas"]["PageResponse"] & {
+            items?: components["schemas"]["InventoryLotResponse"][];
+        };
+        UpdateShoppingListItemRequest: {
+            checked: boolean;
+            purchasedQuantity: number;
+            unit: string;
+            /** Format: date */
+            expiryDate?: string | null;
+        };
+        ShoppingListItemResponse: {
+            /** Format: uuid */
+            itemId: string;
+            sequenceNo: number;
+            ingredientName: string;
+            requiredQuantity: number;
+            purchasedQuantity: number;
+            unit: string;
+            /** Format: date */
+            expiryDate?: string | null;
+            checked: boolean;
+            /** Format: int64 */
+            version: number;
+        };
+        ShoppingListResponse: {
+            /** Format: uuid */
+            shoppingListId: string;
+            /** Format: uuid */
+            sourcePlanId: string;
+            /** Format: uuid */
+            rootPlanId: string;
+            originalServings: number;
+            /** Format: uuid */
+            continuationPlanId?: string | null;
+            /** @enum {string} */
+            status: "OPEN" | "COMPLETED";
+            checkedItemCount: number;
+            totalItemCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            /** Format: int64 */
+            version: number;
+            items: components["schemas"]["ShoppingListItemResponse"][];
+        };
+        ShoppingListPageResponse: components["schemas"]["PageResponse"] & {
+            items?: components["schemas"]["ShoppingListResponse"][];
+        };
+        CreateRecipeImportRequest: {
+            /** @description English-only text containing one or more recipes. */
+            text: string;
+        };
+        RecipeImportAnswerRequest: {
+            questionId: string;
+            value: string;
+        };
+        RecipeImportAnswersRequest: {
+            answers: components["schemas"]["RecipeImportAnswerRequest"][];
+        };
+        RecipeImportDraft: {
+            draftId: string;
+            name?: string | null;
+            servings?: number | null;
+            ingredients: string[];
+            steps: string[];
+        };
+        RecipeImportQuestion: {
+            questionId: string;
+            draftId: string;
+            fieldPath: string;
+            prompt: string;
+            /** @enum {string} */
+            responseType: "TEXT";
+            required: boolean;
+            suggestedValue?: string | null;
+        };
+        RecipeImportAnswer: {
+            questionId: string;
+            value: string;
+        };
+        RecipeImportResponse: {
+            /** Format: uuid */
+            importId: string;
+            text: string;
+            /** @enum {string} */
+            status: "PROCESSING" | "NEEDS_CLARIFICATION" | "READY" | "COMPLETED" | "FAILED";
+            drafts: components["schemas"]["RecipeImportDraft"][];
+            questions: components["schemas"]["RecipeImportQuestion"][];
+            answers: components["schemas"]["RecipeImportAnswer"][];
+            createdRecipes: components["schemas"]["UserRecipeResponse"][];
+            failureCode?: string | null;
+            failureMessage?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            /** Format: int64 */
+            version: number;
+        };
         UserRecipeRequest: {
             name: string;
             servings: number;
@@ -4489,6 +4841,52 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    submitCookingPlanDecisionsAsync: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "Idempotency-Key": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CookingQuestionAnswer"][];
+            };
+        };
+        responses: {
+            /** @description Terminal FAILED plan returned because task submission failed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            /** @description Child task accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanAsyncAcceptedResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     listCookingPlanHistory: {
         parameters: {
             query?: {
@@ -4625,6 +5023,489 @@ export interface operations {
                     "application/json": components["schemas"]["CookingPlanResponse"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getOrCreateCookingPlanShoppingList: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted shopping list, or the existing list for an idempotent retry. */
+            201: {
+                headers: {
+                    /** @description Current list version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listInventoryLots: {
+        parameters: {
+            query?: {
+                /** @description Zero-based page index. */
+                page?: components["parameters"]["Page"];
+                /** @description Bounded page size. */
+                size?: components["parameters"]["Size"];
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active inventory lot page ordered by expiry and creation time. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryLotPageResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createInventoryLot: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryLotRequest"];
+            };
+        };
+        responses: {
+            /** @description Inventory lot created. */
+            201: {
+                headers: {
+                    /** @description Current lot version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryLotResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getInventoryLot: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                lotId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inventory lot detail. */
+            200: {
+                headers: {
+                    /** @description Current lot version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryLotResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateInventoryLot: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "If-Match": string;
+            };
+            path: {
+                lotId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryLotRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated inventory lot. */
+            200: {
+                headers: {
+                    /** @description New lot version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryLotResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    archiveInventoryLot: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "If-Match": string;
+            };
+            path: {
+                lotId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inventory lot archived. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listShoppingLists: {
+        parameters: {
+            query?: {
+                status?: "OPEN" | "COMPLETED";
+                /** @description Zero-based page index. */
+                page?: components["parameters"]["Page"];
+                /** @description Bounded page size. */
+                size?: components["parameters"]["Size"];
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped shopping-list page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListPageResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getShoppingList: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                shoppingListId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shopping-list detail. */
+            200: {
+                headers: {
+                    /** @description Current list version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateShoppingListItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "If-Match": string;
+            };
+            path: {
+                shoppingListId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateShoppingListItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated shopping list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    completeShoppingList: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "Idempotency-Key": string;
+            };
+            path: {
+                shoppingListId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing or terminal continuation plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            /** @description Original-servings continuation task accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanAsyncAcceptedResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createRecipeImport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecipeImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Persisted recipe-import session. */
+            201: {
+                headers: {
+                    /** @description Current optimistic-lock version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeImportResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getRecipeImport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current import session. */
+            200: {
+                headers: {
+                    /** @description Current optimistic-lock version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeImportResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    answerRecipeImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "If-Match": string;
+            };
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeImportAnswersRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated import session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeImportResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    confirmRecipeImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                "If-Match": string;
+            };
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completed session with every created recipe. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeImportResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];

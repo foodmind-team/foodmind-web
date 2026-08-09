@@ -8,8 +8,10 @@ import {
   Compass,
   Home,
   Leaf,
+  PackageOpen,
   Plus,
   Search,
+  ShoppingBasket,
   UserRound,
   Users,
   Utensils,
@@ -30,7 +32,9 @@ const primaryNavigation: NavigationItem[] = [
 
 const toolNavigation: NavigationItem[] = [
   // { to: '/chat', label: 'Ask FoodMind', icon: Bot },
-  // { to: '/cooking', label: 'Cooking', icon: ChefHat },
+  { to: '/cooking', label: 'Cooking', icon: ChefHat },
+  { to: '/shopping-lists', label: 'Shopping', icon: ShoppingBasket },
+  { to: '/inventory', label: 'Inventory', icon: PackageOpen },
   { to: '/history', label: 'History', icon: Clock3 },
   { to: '/dashboard', label: 'Insights', icon: BarChart3 },
 ]
@@ -61,8 +65,8 @@ export function AppShell() {
   const navigate = useNavigate()
   const [online, setOnline] = useState(navigator.onLine)
   const [globalQuery, setGlobalQuery] = useState('')
-  const isCooking = location.pathname.startsWith('/cooking')
-  const showMobileRecordAction = !/^\/(cooking|chat|records)(\/|$)/.test(location.pathname)
+  const isCooking = /^\/(cooking|inventory|shopping-lists)(\/|$)/.test(location.pathname)
+  const showMobileRecordAction = !/^\/(cooking|inventory|shopping-lists|chat|records)(\/|$)/.test(location.pathname)
   const displayName = user?.displayName || 'FoodMind user'
   const initial = displayName.slice(0, 1).toUpperCase()
 
@@ -131,7 +135,7 @@ export function AppShell() {
             <Link className={!isCooking ? 'active' : ''} aria-current={!isCooking ? 'page' : undefined} to="/">
               <Utensils size={16} /><span>Eat out</span>
             </Link>
-            <Link className={isCooking ? 'active' : ''} aria-current={isCooking ? 'page' : undefined} to="/cooking/recipes">
+            <Link className={isCooking ? 'active' : ''} aria-current={isCooking ? 'page' : undefined} to="/cooking">
               <ChefHat size={16} /><span>Cook</span>
             </Link>
           </div>
