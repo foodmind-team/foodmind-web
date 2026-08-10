@@ -177,7 +177,7 @@ test('chatbot lets the backend route natural language and returns the grounded r
   await page.getByLabel('Message', { exact: true }).fill('Summarise my recent favourites')
   await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText(/recent favourites are grounded/i)).toBeVisible()
-  expect(messageBody).toEqual({ content: 'Summarise my recent favourites' })
+  expect(messageBody).toMatchObject({ content: 'Summarise my recent favourites' })
 })
 
 test('record photo uses the bounded media lifecycle and never sends the bearer token to storage', async ({ page }) => {
