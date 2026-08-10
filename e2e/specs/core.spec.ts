@@ -127,7 +127,7 @@ test('cook mode selection generates a real backend plan and drives the execution
   // Execution board: start the first task, complete it, then progress updates.
   await page.getByRole('button', { name: /start/i }).first().click()
   await page.getByRole('button', { name: /complete/i }).first().click()
-  await expect(page.getByText(/1 of 2 tasks complete/)).toBeVisible()
+  await expect(page.getByText(/1 of 3 tasks complete/)).toBeVisible()
   await expect(page.getByRole('progressbar', { name: /cooking plan completion/i })).toHaveAttribute('aria-valuenow', '1')
 })
 
