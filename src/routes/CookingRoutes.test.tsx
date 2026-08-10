@@ -182,8 +182,10 @@ describe('cooking plan async generation', () => {
 
       // Flush the mutation, navigation, and the first plan/task reads.
       await vi.advanceTimersByTimeAsync(100)
-      expect(screen.getByText('Assembling your cooking request…')).toBeInTheDocument()
-      expect(screen.getByText('2 steps completed')).toBeInTheDocument()
+      await vi.waitFor(() => {
+        expect(screen.getByText('Assembling your cooking request…')).toBeInTheDocument()
+        expect(screen.getByText('2 steps completed')).toBeInTheDocument()
+      })
 
       // Second poll updates the progress copy.
       await vi.advanceTimersByTimeAsync(2000)
