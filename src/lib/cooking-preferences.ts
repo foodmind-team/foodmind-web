@@ -1,0 +1,42 @@
+export type CookingPreferences = {
+  region: string
+  requiredDietaryTagCodes: string[]
+  avoidAllergenCodes: string[]
+}
+
+const STORAGE_KEY = 'foodmind:cooking-preferences:v1'
+
+export const DEFAULT_COOKING_PREFERENCES: CookingPreferences = {
+  region: 'SG',
+  requiredDietaryTagCodes: [],
+  avoidAllergenCodes: [],
+}
+
+function cleanCodes(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim().toUpperCase()))]
+}
+
+export function loadCookingPreferences(): CookingPreferences {
+  if (typeof window === 'undefined') return DEFAULT_COOKING_PREFERENCES
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}') as Record<string, unknown>
+    return {
+      region: typeof parsed.region === 'string' && parsed.region.trim() ? parsed.region.trim().toUpperCase() : 'SG',
+      requiredDietaryTagCodes: cleanCodes(parsed.requiredDietaryTagCodes),
+      avoidAllergenCodes: cleanCodes(parsed.avoidAllergenCodes),
+    }
+  } catch {
+    return DEFAULT_COOKING_PREFERENCES
+  }
+}
+
+export function saveCookingPreferences(preferences: CookingPreferences) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    region: preferences.region.trim().toUpperCase() || 'SG',
+    requiredDietaryTagCodes: cleanCodes(preferences.requiredDietaryTagCodes),
+    avoidAllergenCodes: cleanCodes(preferences.avoidAllergenCodes),
+  }))
+}

@@ -17,7 +17,7 @@ import {
   Utensils,
 } from 'lucide-react'
 import { useEffect, useState, type ComponentType, type FormEvent } from 'react'
-import { Link, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthProvider'
 
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>
@@ -51,7 +51,7 @@ function Navigation({ className, items, label }: { className: string; items: Nav
   return (
     <nav className={className} aria-label={label}>
       {items.map(({ to, label: itemLabel, icon: NavigationIcon, end }) => (
-        <NavLink className={({ isActive }) => isActive ? 'active' : ''} to={to} end={end} key={to}>
+        <NavLink className={({ isActive }) => isActive ? 'active' : ''} aria-label={itemLabel} to={to} end={end} key={to}>
           <NavigationIcon size={19} strokeWidth={2.05} /><span>{itemLabel}</span>
         </NavLink>
       ))}
@@ -66,7 +66,7 @@ export function AppShell() {
   const [online, setOnline] = useState(navigator.onLine)
   const [globalQuery, setGlobalQuery] = useState('')
   const isCooking = /^\/(cooking|inventory|shopping-lists)(\/|$)/.test(location.pathname)
-  const showMobileRecordAction = !/^\/(cooking|inventory|shopping-lists|chat|records)(\/|$)/.test(location.pathname)
+  const showMobileRecordAction = !/^\/(cooking|inventory|shopping-lists|chat|records|saved\/recipes)(\/|$)/.test(location.pathname)
   const displayName = user?.displayName || 'FoodMind user'
   const initial = displayName.slice(0, 1).toUpperCase()
 
@@ -80,6 +80,10 @@ export function AppShell() {
       window.removeEventListener('offline', onOffline)
     }
   }, [])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [location.pathname])
 
   const searchFoodMind = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -161,7 +165,6 @@ export function AppShell() {
 
       {showMobileRecordAction && <Link className="mobile-record-fab" to="/records/new" aria-label="Add a food or drink record"><Plus size={19} /><span>Record</span></Link>}
       <Navigation className="bottom-navigation" items={mobileNavigation} label="Primary navigation" />
-      <ScrollRestoration />
     </div>
   )
 }

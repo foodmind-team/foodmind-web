@@ -9,6 +9,7 @@
 import type { Schema } from './api/client'
 
 export type CookingTimelineTask = Schema<'CookingPlanTimelineTask'>
+export type CookingMiseEnPlaceItem = Schema<'CookingPlanMiseEnPlaceItem'>
 
 export type LocalTaskState = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'
 
@@ -35,12 +36,117 @@ export class ExecutionConflictError extends Error {
   }
 }
 
+type PersistedExecutionProgress = {
+  timelineKey: string
+  eventId: number
+  states: Record<string, LocalTaskState>
+}
+
+function progressStorageKey(planId: string) {
+  return `foodmind:cooking-progress:${planId}:v1`
+}
+
+function timelineKey(timeline: CookingTimelineTask[]) {
+  return orderedTasks(timeline).map((task, index) => taskKey(task, index)).join('|')
+}
+
+export function loadExecutionProgress(
+  planId: string,
+  timeline: CookingTimelineTask[],
+): { states: Record<string, LocalTaskState>; eventId: number } {
+  const initial = { states: initExecutionStates(timeline), eventId: 0 }
+  if (typeof window === 'undefined' || !planId) return initial
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(progressStorageKey(planId)) || 'null') as PersistedExecutionProgress | null
+    if (!parsed || parsed.timelineKey !== timelineKey(timeline) || !Number.isInteger(parsed.eventId) || parsed.eventId < 0) return initial
+    const expectedKeys = Object.keys(initial.states)
+    const actualKeys = Object.keys(parsed.states || {})
+    if (expectedKeys.length !== actualKeys.length || expectedKeys.some((key) => !actualKeys.includes(key))) return initial
+    if (actualKeys.some((key) => !['PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(parsed.states[key]))) return initial
+    return { states: parsed.states, eventId: parsed.eventId }
+  } catch {
+    return initial
+  }
+}
+
+export function saveExecutionProgress(
+  planId: string,
+  timeline: CookingTimelineTask[],
+  states: Record<string, LocalTaskState>,
+  eventId: number,
+) {
+  if (typeof window === 'undefined' || !planId) return
+  window.localStorage.setItem(progressStorageKey(planId), JSON.stringify({
+    timelineKey: timelineKey(timeline),
+    eventId,
+    states,
+  } satisfies PersistedExecutionProgress))
+}
+
+export function clearExecutionProgress(planId: string) {
+  if (typeof window === 'undefined' || !planId) return
+  window.localStorage.removeItem(progressStorageKey(planId))
+}
+
 function taskKey(task: CookingTimelineTask, index: number): string {
   return task.taskId || `task-${index}`
 }
 
 function orderedTasks(timeline: CookingTimelineTask[]): CookingTimelineTask[] {
   return [...timeline].sort((a, b) => (a.startMinute ?? 0) - (b.startMinute ?? 0))
+}
+
+function normaliseInstruction(value?: string | null): string {
+  return (value || '')
+    .replace(/^\[(?:prep|mise en place)\]\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase()
+}
+
+function prepAlreadyScheduled(item: CookingMiseEnPlaceItem, timeline: CookingTimelineTask[]): boolean {
+  const candidates = [item.instruction, item.ingredient]
+    .map(normaliseInstruction)
+    .filter(Boolean)
+  const operation = normaliseInstruction(item.operation)
+  const ingredient = normaliseInstruction(item.ingredient)
+
+  return timeline.some((task) => {
+    const scheduled = normaliseInstruction(task.instruction)
+    const sameText = candidates.some((candidate) => (
+      candidate === scheduled
+      || (Math.min(candidate.length, scheduled.length) >= 24
+        && (candidate.includes(scheduled) || scheduled.includes(candidate)))
+    ))
+    const sameOperation = operation.length >= 3
+      && ingredient.length >= 3
+      && scheduled.includes(operation)
+      && scheduled.includes(ingredient)
+    return sameText || sameOperation
+  })
+}
+
+export function buildExecutionTimeline(
+  timeline: CookingTimelineTask[],
+  miseEnPlace: CookingMiseEnPlaceItem[],
+): CookingTimelineTask[] {
+  const missingPrep = [...miseEnPlace]
+    .sort((a, b) => (a.sequenceNo ?? 0) - (b.sequenceNo ?? 0))
+    .filter((item) => !prepAlreadyScheduled(item, timeline))
+    .map((item, index): CookingTimelineTask => ({
+      taskId: `mise-en-place-${item.sequenceNo ?? index + 1}-${index}`,
+      instruction: item.instruction || [item.operation, item.ingredient].filter(Boolean).join(' ') || 'Prepare ingredients',
+      startMinute: 0,
+      durationMinutes: item.durationMinutes ?? undefined,
+      workMode: 'ACTIVE',
+      category: 'preparation',
+      dishId: 'shared',
+      resources: item.resources || [],
+    }))
+
+  // Stable sorting keeps synthetic preparation steps ahead of cooking tasks
+  // that also start at minute zero.
+  return orderedTasks([...missingPrep, ...timeline])
 }
 
 export function initExecutionStates(timeline: CookingTimelineTask[]): Record<string, LocalTaskState> {
