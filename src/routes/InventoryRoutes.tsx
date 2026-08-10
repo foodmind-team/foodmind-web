@@ -19,6 +19,19 @@ function lotBody(draft: LotDraft): Schema<'InventoryLotRequest'> {
   }
 }
 
+function updateInventoryCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  saved: Schema<'InventoryLotResponse'>,
+  prepend = false,
+) {
+  queryClient.setQueryData<Schema<'InventoryLotPageResponse'>>(queryKeys.inventory.list(), (current) => {
+    if (!current) return current
+    const items = (current.items || []) as Schema<'InventoryLotResponse'>[]
+    const remaining = items.filter((item) => item.lotId !== saved.lotId)
+    return { ...current, items: prepend ? [saved, ...remaining] : remaining.concat(saved) } as Schema<'InventoryLotPageResponse'>
+  })
+}
+
 export function InventoryPage() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -29,8 +42,9 @@ export function InventoryPage() {
   })
   const create = useMutation({
     mutationFn: async (body: Schema<'InventoryLotRequest'>) => dataOrThrow<Schema<'InventoryLotResponse'>>(await api.POST('/inventory/lots', { body })),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setDraft(EMPTY_LOT)
+      updateInventoryCache(queryClient, saved, true)
       showToast('Inventory lot added.')
       void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() })
     },
@@ -73,7 +87,13 @@ function InventoryLotCard({ lot }: { lot: Schema<'InventoryLotResponse'> }) {
       params: { path: { lotId: lot.lotId }, header: { 'If-Match': `"${lot.version}"` } },
       body: lotBody(draft),
     })),
-    onSuccess: () => { setEditing(false); showToast('Inventory lot updated.'); void refresh() },
+    onSuccess: (saved) => {
+      setDraft({ ingredientName: saved.ingredientName, quantity: String(saved.quantity), unit: saved.unit, expiryDate: saved.expiryDate || '' })
+      updateInventoryCache(queryClient, saved)
+      setEditing(false)
+      showToast('Inventory lot updated.')
+      void refresh()
+    },
   })
   const archive = useMutation({
     mutationFn: async () => dataOrThrow(await api.DELETE('/inventory/lots/{lotId}', { params: { path: { lotId: lot.lotId }, header: { 'If-Match': `"${lot.version}"` } } })),

@@ -147,7 +147,7 @@ describe('cook mode selection page', () => {
 
     await user.click(screen.getByRole('button', { name: /generate plan/i }))
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
-    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId] })
+    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId], region: 'SG', requiredDietaryTagCodes: [], avoidAllergenCodes: [] })
     expect(receivedBody).not.toHaveProperty('ingredients')
   })
 })
@@ -182,8 +182,10 @@ describe('cooking plan async generation', () => {
 
       // Flush the mutation, navigation, and the first plan/task reads.
       await vi.advanceTimersByTimeAsync(100)
-      expect(screen.getByText('Assembling your cooking request…')).toBeInTheDocument()
-      expect(screen.getByText('2 steps completed')).toBeInTheDocument()
+      await vi.waitFor(() => {
+        expect(screen.getByText('Assembling your cooking request…')).toBeInTheDocument()
+        expect(screen.getByText('2 steps completed')).toBeInTheDocument()
+      })
 
       // Second poll updates the progress copy.
       await vi.advanceTimersByTimeAsync(2000)
@@ -251,6 +253,49 @@ describe('cooking plan async generation', () => {
     await user.click(screen.getByRole('button', { name: /cancel this generation/i }))
 
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
+  })
+})
+
+describe('cooking execution progress', () => {
+  it('puts the ingredient pull list in the first actionable step and removes duplicate modules', async () => {
+    server.use(http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)))
+
+    renderCookingRoutes(`/cooking/${planId}`)
+
+    expect(await screen.findByRole('heading', { name: '0 of 3 tasks complete' })).toBeInTheDocument()
+    const ready = screen.getByRole('heading', { name: /ready to start/i }).closest('section')!
+    expect(within(ready).getByText('Gather these ingredients')).toBeInTheDocument()
+    expect(within(ready).getByText('Soba')).toBeInTheDocument()
+    expect(within(ready).getByText('2 portions')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'All steps in order' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'What to buy and portion.' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'When each dish is ready.' })).not.toBeInTheDocument()
+  })
+
+  it('keeps blocked tasks collapsed until the user asks to see them', async () => {
+    const user = userEvent.setup()
+    server.use(http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)))
+
+    renderCookingRoutes(`/cooking/${planId}`)
+
+    const blocked = (await screen.findByRole('heading', { name: /blocked/i })).closest('details')!
+    expect(blocked).not.toHaveAttribute('open')
+    await user.click(within(blocked).getByRole('heading', { name: /blocked/i }))
+    expect(blocked).toHaveAttribute('open')
+  })
+
+  it('restores completed steps after the plan page is reopened', async () => {
+    const user = userEvent.setup()
+    server.use(http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)))
+    const first = renderCookingRoutes(`/cooking/${planId}`)
+
+    await user.click(await screen.findByRole('button', { name: /start/i }))
+    await user.click(screen.getByRole('button', { name: /complete/i }))
+    expect(screen.getByRole('heading', { name: '1 of 3 tasks complete' })).toBeInTheDocument()
+    first.unmount()
+
+    renderCookingRoutes(`/cooking/${planId}`)
+    expect(await screen.findByRole('heading', { name: '1 of 3 tasks complete' })).toBeInTheDocument()
   })
 })
 
@@ -324,20 +369,20 @@ describe('execution board', () => {
     renderCookingRoutes(`/cooking/${planId}`)
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
 
-    // First task is ready to start; the second is blocked behind it.
+    // Preparation is the first actionable step; cooking waits behind it.
     const startLane = screen.getByRole('heading', { name: /ready to start/i }).closest('section')!
-    expect(within(startLane).getByText('Boil the soba')).toBeInTheDocument()
-    expect(screen.getByText(/waiting for boil the soba to finish/i)).toBeInTheDocument()
+    expect(within(startLane).getByText('Wash the greens')).toBeInTheDocument()
+    expect(screen.getByText(/waiting for wash the greens to finish/i)).toBeInTheDocument()
 
-    // Start the first task → it moves to in progress and can be completed.
+    // Start preparation → it moves to in progress and can be completed.
     await user.click(screen.getByRole('button', { name: /start/i }))
     const progressLane = screen.getByRole('heading', { name: /in progress/i }).closest('section')!
-    expect(within(progressLane).getByText('Boil the soba')).toBeInTheDocument()
+    expect(within(progressLane).getByText('Wash the greens')).toBeInTheDocument()
 
     await user.click(within(progressLane).getByRole('button', { name: /complete/i }))
-    expect(screen.getByText('1 of 2 tasks complete')).toBeInTheDocument()
-    // The second task is now ready to start.
+    expect(screen.getByText('1 of 3 tasks complete')).toBeInTheDocument()
+    // The first cooking task is now ready to start.
     const nextLane = screen.getByRole('heading', { name: /ready to start/i }).closest('section')!
-    expect(within(nextLane).getByText('Rest and dress')).toBeInTheDocument()
+    expect(within(nextLane).getByText('Boil the soba')).toBeInTheDocument()
   })
 })

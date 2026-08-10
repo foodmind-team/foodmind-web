@@ -3,7 +3,7 @@
   "sourcePath": "src/main/resources/openapi/openapi.yaml",
   "backendCommit": "WORKTREE-uncommitted",
   "openapiInfoVersion": "v1",
-  "sha256": "8c3d7af875972c4f3a76dc6ab8c788008e5a0f13ac27587c1ba2572764226734",
+  "sha256": "70a83c8cbd3c8e4d3d7414844b3f11672747e0c9b17b04937617fe3986def6eb",
   "generator": "openapi-typescript",
-  "generatedAt": "2026-08-09T09:00:00.000Z"
+  "generatedAt": "2026-08-10T11:10:00.000Z"
 }

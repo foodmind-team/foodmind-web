@@ -6154,8 +6154,7 @@ button.recipe-card.selected {
 }
 
 .recipe-selection-dock {
-  position: sticky;
-  bottom: 18px;
+  position: relative;
   z-index: 20;
   display: grid;
   grid-template-columns: minmax(190px, 1fr) 115px 135px auto;
@@ -6439,7 +6438,6 @@ button.recipe-card.selected {
   }
 
   .recipe-selection-dock {
-    bottom: 80px;
     grid-template-columns: 1fr 1fr;
     border-radius: 16px;
   }
@@ -7693,6 +7691,13 @@ dialog.discovery-overlay {
   padding: 16px;
 }
 
+.execution-lane.available,
+.execution-lane.progress,
+.execution-lane.done,
+.execution-lane.collapsible-lane {
+  grid-column: 1 / -1;
+}
+
 .lane-head {
   display: flex;
   align-items: center;
@@ -7726,6 +7731,38 @@ dialog.discovery-overlay {
   font-weight: 700;
 }
 
+.collapsible-lane {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-lane summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px;
+}
+
+.collapsible-lane summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-lane summary .lane-head {
+  margin-bottom: 0;
+}
+
+.collapsible-lane .lane-list {
+  padding: 0 16px 16px;
+}
+
+.lane-toggle {
+  margin-left: auto;
+  transition: transform .18s ease;
+}
+
+.collapsible-lane[open] .lane-toggle {
+  transform: rotate(90deg);
+}
+
 .lane-list {
   display: grid;
   gap: 9px;
@@ -7749,6 +7786,52 @@ dialog.discovery-overlay {
 .task-card small {
   color: var(--faint);
   font-size: 9px;
+}
+
+.task-ingredients {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.task-ingredients > strong {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+
+.task-ingredients ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-ingredients li {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 9px;
+  background: #1d231d;
+  padding: 8px 10px;
+}
+
+.task-ingredients li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.task-ingredients li small {
+  flex: 0 0 auto;
+  color: var(--muted);
 }
 
 .task-card .block-reason {
@@ -7784,22 +7867,6 @@ dialog.discovery-overlay {
 .lane-action:hover {
   border-color: var(--lime);
   color: var(--lime);
-}
-
-.all-steps-details {
-  list-style: none;
-}
-
-.all-steps-details summary {
-  cursor: pointer;
-}
-
-.all-steps-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.all-steps-details .cooking-steps li {
-  margin-bottom: 14px;
 }
 
 .step-badge.pending {
@@ -8181,12 +8248,14 @@ dialog.discovery-overlay {
 
 .shopping-items {
   display: grid;
+  width: 100%;
   min-width: 0;
   gap: 12px;
 }
 
 .shopping-item {
   display: grid;
+  width: 100%;
   min-width: 0;
   grid-template-columns: auto minmax(180px, 1.5fr) minmax(110px, .7fr) minmax(90px, .5fr) minmax(140px, .7fr) auto;
   align-items: end;
@@ -8260,6 +8329,10 @@ dialog.discovery-overlay {
 }
 
 @media (max-width: 640px) {
+  .shopping-detail-page {
+    overflow-x: clip;
+  }
+
   .shopping-detail-page,
   .shopping-detail-page .section-page-heading,
   .shopping-detail-page .section-page-heading > div,
@@ -8274,6 +8347,7 @@ dialog.discovery-overlay {
 
   .shopping-item input:not([type='checkbox']) {
     width: 100%;
+    max-width: 100%;
   }
 
   .inventory-lot-grid,

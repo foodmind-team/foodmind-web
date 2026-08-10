@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Check, ListChecks, PackageCheck, Save, ShoppingBasket } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
@@ -65,9 +65,15 @@ function ShoppingItemEditor({ item, list }: {
   list: Schema<'ShoppingListResponse'>
 }) {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const [quantity, setQuantity] = useState(String(item.purchasedQuantity))
   const [unit, setUnit] = useState(item.unit)
   const [expiryDate, setExpiryDate] = useState(item.expiryDate || '')
+  useEffect(() => {
+    setQuantity(String(item.purchasedQuantity))
+    setUnit(item.unit)
+    setExpiryDate(item.expiryDate || '')
+  }, [item.expiryDate, item.purchasedQuantity, item.unit])
   const update = useMutation({
     mutationFn: async (checked: boolean) => dataOrThrow<Schema<'ShoppingListResponse'>>(await api.PATCH('/shopping-lists/{shoppingListId}/items/{itemId}', {
       params: { path: { shoppingListId: list.shoppingListId, itemId: item.itemId }, header: { 'If-Match': `"${item.version}"` } },
@@ -76,18 +82,19 @@ function ShoppingItemEditor({ item, list }: {
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.shopping.detail(list.shoppingListId), updated)
       void queryClient.invalidateQueries({ queryKey: queryKeys.shopping.list() })
+      showToast('Shopping item updated.')
     },
   })
   const valid = Number.isFinite(Number(quantity)) && Number(quantity) > 0 && unit.trim().length > 0
 
   return (
     <article className={`shopping-item${item.checked ? ' checked' : ''}`}>
-      <label className="shopping-check"><input type="checkbox" checked={item.checked} disabled={list.status !== 'OPEN' || update.isPending || !valid} onChange={(event) => update.mutate(event.target.checked)} /><span><Check size={16} /></span></label>
+      <label className="shopping-check"><input type="checkbox" aria-label={`Mark ${item.ingredientName} ${item.checked ? 'not purchased' : 'purchased'}`} checked={item.checked} disabled={list.status !== 'OPEN' || update.isPending || !valid} onChange={(event) => update.mutate(event.target.checked)} /><span><Check size={16} /></span></label>
       <div className="shopping-item-copy"><p className="eyebrow">Need {item.requiredQuantity} {item.unit}</p><h2>{item.ingredientName}</h2></div>
       <label>Purchased quantity<input type="number" min="0.001" step="0.001" disabled={list.status !== 'OPEN'} value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
       <label>Unit<input maxLength={16} disabled={list.status !== 'OPEN'} value={unit} onChange={(event) => setUnit(event.target.value)} /></label>
       <label>Expiry date<input type="date" disabled={list.status !== 'OPEN'} value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} /></label>
-      {list.status === 'OPEN' && <button className="text-button" type="button" disabled={!valid || update.isPending} onClick={() => update.mutate(item.checked)}><Save size={15} /> Save details</button>}
+      {list.status === 'OPEN' && <button className="text-button" aria-label={`Save details for ${item.ingredientName}`} type="button" disabled={!valid || update.isPending} onClick={() => update.mutate(item.checked)}><Save size={15} /> Save details</button>}
       {update.isError && <div className="form-alert" role="alert">{errorMessage(update.error)}</div>}
     </article>
   )

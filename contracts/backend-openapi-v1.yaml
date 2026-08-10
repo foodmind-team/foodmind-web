@@ -2667,7 +2667,7 @@ components:
           type: string
           minLength: 1
           maxLength: 100000
-          description: English-only text containing one or more recipes.
+          description: Text in any language containing one or more recipes. Structured recipe fields are returned and persisted in English.
     RecipeImportAnswerRequest:
       type: object
       additionalProperties: false
@@ -4502,7 +4502,7 @@ paths:
       tags:
         - Recipe Imports
       operationId: createRecipeImport
-      summary: Parse an English text containing one or more recipes.
+      summary: Parse multilingual text containing one or more recipes into English recipe data.
       description: Persists an owner-scoped import session and returns structured Agent follow-up questions when required recipe facts are missing.
       security:
         - bearerAuth: []

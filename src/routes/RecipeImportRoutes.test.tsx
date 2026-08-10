@@ -32,7 +32,7 @@ const completed = {
 
 function renderRoutes(initialEntry: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking/import" element={<RecipeImportStartPage />} /><Route path="/cooking/import/:importId" element={<RecipeImportSessionPage />} /><Route path="/cooking" element={<CookingLocation />} /></Routes></MemoryRouter></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/saved/recipes/new" element={<RecipeImportStartPage />} /><Route path="/saved/recipes" element={<h1>My recipes</h1>} /><Route path="/cooking/import" element={<RecipeImportStartPage />} /><Route path="/cooking/import/:importId" element={<RecipeImportSessionPage />} /><Route path="/cooking" element={<CookingLocation />} /></Routes></MemoryRouter></QueryClientProvider>)
 }
 
 function CookingLocation() {
@@ -41,17 +41,44 @@ function CookingLocation() {
 }
 
 describe('natural-language recipe import', () => {
-  it('blocks mixed-language text locally with an English error', async () => {
-    const user = userEvent.setup()
-    let requests = 0
-    server.use(http.post(`${origin}/api/v1/recipe-imports`, () => { requests += 1; return HttpResponse.json(needs, { status: 201 }) }))
-    renderRoutes('/cooking/import')
+  it('uses one natural-language text box on the add recipe page', () => {
+    renderRoutes('/saved/recipes/new')
 
-    await user.type(screen.getByLabelText('Recipe text'), 'Make 番茄 pasta')
+    expect(screen.getByRole('heading', { name: 'Describe the recipes you want to add.' })).toBeInTheDocument()
+    expect(screen.getAllByRole('textbox')).toHaveLength(1)
+    expect(screen.getByLabelText('Recipe text')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Recipe name')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Servings')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /my recipes/i })).toHaveAttribute('href', '/saved/recipes')
+  })
+
+  it('focuses the recipe text box when an empty parse is attempted', async () => {
+    const user = userEvent.setup()
+    renderRoutes('/saved/recipes/new')
+
     await user.click(screen.getByRole('button', { name: /parse recipes/i }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Please use English only. Chinese or mixed-language input is not supported.')
-    expect(requests).toBe(0)
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter at least one recipe')
+    expect(screen.getByLabelText('Recipe text')).toHaveFocus()
+  })
+
+  it('submits multilingual text and lets the Agent normalise it to English', async () => {
+    const user = userEvent.setup()
+    let submittedText = ''
+    server.use(
+      http.post(`${origin}/api/v1/recipe-imports`, async ({ request }) => {
+        submittedText = String((await request.json() as { text: string }).text)
+        return HttpResponse.json(needs, { status: 201 })
+      }),
+      http.get(`${origin}/api/v1/recipe-imports/${importId}`, () => HttpResponse.json(needs)),
+    )
+    renderRoutes('/cooking/import')
+
+    await user.type(screen.getByLabelText('Recipe text'), '做一道番茄意面，配料有番茄和意大利面')
+    await user.click(screen.getByRole('button', { name: /parse recipes/i }))
+
+    await waitFor(() => expect(submittedText).toBe('做一道番茄意面，配料有番茄和意大利面'))
+    expect(await screen.findByText('Lemon Pasta')).toBeInTheDocument()
   })
 
   it('reloads a persisted question, answers it, saves all recipes, and redirects selected IDs', async () => {
