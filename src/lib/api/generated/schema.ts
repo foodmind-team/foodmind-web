@@ -843,7 +843,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Parse an English text containing one or more recipes.
+         * Parse multilingual text containing one or more recipes into English recipe data.
          * @description Persists an owner-scoped import session and returns structured Agent follow-up questions when required recipe facts are missing.
          */
         post: operations["createRecipeImport"];
@@ -4330,7 +4330,7 @@ export interface components {
             items?: components["schemas"]["ShoppingListResponse"][];
         };
         CreateRecipeImportRequest: {
-            /** @description English-only text containing one or more recipes. */
+            /** @description Text in any language containing one or more recipes. Structured recipe fields are returned and persisted in English. */
             text: string;
         };
         RecipeImportAnswerRequest: {

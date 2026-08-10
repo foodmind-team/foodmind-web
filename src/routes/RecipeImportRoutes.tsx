@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Bot, Check, ChefHat, ListChecks, RefreshCw, Sparkles, Users } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ErrorState, LoadingState } from '../components/feedback/States'
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
-import { ENGLISH_ONLY_MESSAGE, isEnglishScriptInput } from '../lib/english-input'
 
 type ImportSession = Schema<'RecipeImportResponse'>
 type ImportDraft = Schema<'RecipeImportDraft'>
@@ -29,10 +28,15 @@ Steps:
 2. Toss with olive oil.`
 
 export function RecipeImportStartPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const fromRecipeLibrary = location.pathname.startsWith('/saved/recipes')
+  const backPath = fromRecipeLibrary ? '/saved/recipes' : '/cooking'
+  const backLabel = fromRecipeLibrary ? 'My recipes' : 'Cooking'
   const [text, setText] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const textInput = useRef<HTMLTextAreaElement>(null)
   const create = useMutation({
     mutationFn: async (body: Schema<'CreateRecipeImportRequest'>) =>
       dataOrThrow<ImportSession>(await api.POST('/recipe-imports', { body })),
@@ -44,17 +48,20 @@ export function RecipeImportStartPage() {
 
   const submit = () => {
     const value = text.trim()
-    if (!value) return setValidationError('Enter at least one recipe before continuing.')
-    if (!isEnglishScriptInput(value)) return setValidationError(ENGLISH_ONLY_MESSAGE)
+    if (!value) {
+      setValidationError('Enter at least one recipe before continuing.')
+      textInput.current?.focus()
+      return
+    }
     setValidationError(null)
     create.mutate({ text: value })
   }
 
   return (
     <div className="page section-page cooking-recipe-editor-page recipe-import-page">
-      <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
+      <Link className="back-link" to={backPath}><ArrowLeft size={16} /> {backLabel}</Link>
       <header className="section-page-heading">
-        <div><p className="eyebrow">Cooking · Agent import</p><h1>Turn recipe text into dishes.</h1><p>Paste one English text with one or more dishes. FoodMind will ask about anything required before it saves the recipes.</p></div>
+        <div><p className="eyebrow">Recipes · Agent</p><h1>Describe the recipes you want to add.</h1><p>Write in any language. FoodMind converts the recipe data to English, asks only for required missing details, then saves every recipe to your account.</p></div>
         <span className="cooking-mark"><Bot /></span>
       </header>
       <section className="recipe-import-composer">
@@ -63,10 +70,10 @@ export function RecipeImportStartPage() {
           <button type="button" className="text-button" onClick={() => { setText(starterText); setValidationError(null) }}>Use an example</button>
         </div>
         <label htmlFor="recipe-import-text">Recipe text</label>
-        <textarea id="recipe-import-text" className="paste-box" value={text} onChange={(event) => setText(event.target.value)} placeholder="Describe one or more recipes in English…" aria-describedby="recipe-import-help recipe-import-error" />
-        <p id="recipe-import-help" className="section-support">English input only. The original text and follow-up progress are saved to your account.</p>
+        <textarea ref={textInput} id="recipe-import-text" className="paste-box" value={text} onChange={(event) => setText(event.target.value)} placeholder="Describe one or more recipes in any language…" aria-describedby="recipe-import-help recipe-import-error" />
+        <p id="recipe-import-help" className="section-support">Any language is supported. Recipe fields are saved in English, while your original text and follow-up progress are preserved.</p>
         {(validationError || create.isError) && <div id="recipe-import-error" className="form-alert" role="alert">{validationError || errorMessage(create.error)}</div>}
-        <div className="recipe-import-actions"><Link className="secondary-action" to="/cooking">Cancel</Link><button className="primary-action" type="button" disabled={create.isPending} onClick={submit}>{create.isPending ? <><RefreshCw className="spin-icon" size={17} /> Asking the Agent…</> : <><Bot size={17} /> Parse recipes <ArrowRight size={16} /></>}</button></div>
+        <div className="recipe-import-actions"><Link className="secondary-action" to={backPath}>Cancel</Link><button className="primary-action" type="button" disabled={create.isPending} onClick={submit}>{create.isPending ? <><RefreshCw className="spin-icon" size={17} /> Asking the Agent…</> : <><Bot size={17} /> Parse recipes <ArrowRight size={16} /></>}</button></div>
       </section>
     </div>
   )
@@ -123,7 +130,6 @@ function RecipeImportSessionView({ session }: { session: ImportSession }) {
   const submitAnswers = () => {
     const values = session.questions.map((question) => ({ questionId: question.questionId, value: (answers[question.questionId] || '').trim() }))
     if (values.some((item) => !item.value)) return setFormError('Answer every required question before continuing.')
-    if (values.some((item) => !isEnglishScriptInput(item.value))) return setFormError(ENGLISH_ONLY_MESSAGE)
     setFormError(null)
     answer.mutate({ answers: values })
   }
