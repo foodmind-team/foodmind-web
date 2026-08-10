@@ -29,12 +29,16 @@ import {
 import { loadCookingPreferences, saveCookingPreferences } from '../lib/cooking-preferences'
 import { formatDateTime, sentenceCase } from '../lib/format'
 
-const NODE_LABELS: Record<string, string> = {
-  assemble_request: 'Assembling your cooking request…',
-  solve_schedule: 'Solving the cooking schedule…',
-  validate_result: 'Validating the generated plan…',
-  materialise: 'Saving your plan…',
-}
+const PLAN_STAGES = [
+  { label: 'Preparing recipes', nodes: ['assemble_request', 'validate_input'] },
+  { label: 'Understanding recipes', nodes: ['parse_recipes', 'detect_gaps', 'infer_local', 'research_missing', 'apply_research_evidence', 'validate_recipe_ir'] },
+  { label: 'Safety & inventory', nodes: ['validate_safety', 'check_feasibility', 'build_confirmation_response'] },
+  { label: 'Preparation plan', nodes: ['merge_preparation', 'build_task_graph'] },
+  { label: 'Cooking schedule', nodes: ['solve_schedule', 'verify_schedule', 'repair_schedule', 'agent_controller', 'run_tool'] },
+  { label: 'Finalising', nodes: ['apply_confirmation', 'explain_schedule', 'render_ready_response', 'render_infeasible_response', 'render_failed_response', 'validate_result', 'materialise'] },
+] as const
+
+const STAGE_PERCENTAGES = [8, 30, 58, 74, 88, 97]
 
 function errorStatus(error: unknown) {
   return error instanceof ApiError ? error.status : undefined
@@ -42,8 +46,38 @@ function errorStatus(error: unknown) {
 
 function progressCopy(progress: Schema<'CookingPlanTaskProgressResponse'> | undefined) {
   if (progress?.message) return progress.message
-  if (progress?.node && NODE_LABELS[progress.node]) return NODE_LABELS[progress.node]
-  return 'Working on your cooking plan…'
+  const view = planProgressView(progress)
+  return view.index < 0 ? 'Waiting for the Cooking Agent…' : `${view.label}…`
+}
+
+function planProgressView(progress: Schema<'CookingPlanTaskProgressResponse'> | undefined) {
+  const node = progress?.node || ''
+  const index = PLAN_STAGES.findIndex((stage) => stage.nodes.some((candidate) => candidate === node))
+  return {
+    index,
+    label: index >= 0 ? PLAN_STAGES[index].label : 'Starting',
+    percent: index >= 0 ? STAGE_PERCENTAGES[index] : 4,
+  }
+}
+
+function formatElapsed(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes ? `${minutes}m ${String(seconds).padStart(2, '0')}s` : `${seconds}s`
+}
+
+function useProgressClock(active: boolean, node?: string | null) {
+  const [now, setNow] = useState(() => Date.now())
+  const [phaseStartedAt, setPhaseStartedAt] = useState(() => Date.now())
+  useEffect(() => {
+    if (active) setPhaseStartedAt(Date.now())
+  }, [active, node])
+  useEffect(() => {
+    if (!active) return undefined
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [active])
+  return { now, phaseSeconds: Math.max(0, Math.floor((now - phaseStartedAt) / 1000)) }
 }
 
 function formatMinute(minute?: number) {
@@ -76,6 +110,8 @@ export function CookingDetailPage() {
     retry: false,
     refetchInterval: (query) => (errorStatus(query.state.error) === 404 ? false : 2000),
   })
+  const localProcessingStartedAt = useRef(Date.now())
+  const progressClock = useProgressClock(isProcessing, task.data?.progress?.node)
   const taskEnded = useRef(false)
   useEffect(() => {
     if (errorStatus(task.error) === 404 && !taskEnded.current) {
@@ -124,11 +160,25 @@ export function CookingDetailPage() {
   const data = plan.data!
   if (data.status === 'PROCESSING') {
     const progress = task.data?.progress
+    const progressView = planProgressView(progress)
+    const parsedCreatedAt = Date.parse(data.createdAt || '')
+    const createdAt = Number.isNaN(parsedCreatedAt) ? localProcessingStartedAt.current : parsedCreatedAt
+    const elapsedSeconds = Math.max(0, Math.floor((progressClock.now - createdAt) / 1000))
+    const isTakingLonger = progressClock.phaseSeconds >= 25
     return (
       <div className="page section-page cooking-result-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
-        <header className="section-page-heading"><div><p className="eyebrow">PROCESSING · submitted {formatDateTime(data.createdAt)}</p><h1>Building your cooking plan</h1><p>The Cooking Agent is working in the background. Progress updates automatically.</p></div><span className="cooking-mark"><ChefHat /></span></header>
-        <section className="cooking-progress-card" aria-busy="true"><div><p className="eyebrow">Agent progress</p><h2>{progressCopy(progress)}</h2></div><strong>{progress?.completedSteps ?? 0} steps completed</strong><small>{task.data ? `Task ${task.data.taskId} · ${task.data.syncState === 'PENDING' ? 'queued' : 'polling'}` : 'Starting the background task…'}</small></section>
+        <header className="section-page-heading"><div><p className="eyebrow">PROCESSING · submitted {data.createdAt ? formatDateTime(data.createdAt) : 'just now'}</p><h1>Building your cooking plan</h1><p>The Cooking Agent is working in the background. Progress updates automatically.</p></div><span className="cooking-mark"><ChefHat /></span></header>
+        <section className="cooking-progress-card generation-progress" aria-busy="true" aria-live="polite">
+          <div><p className="eyebrow">Agent progress</p><h2>{progressCopy(progress)}</h2><p className="generation-runtime">Elapsed {formatElapsed(elapsedSeconds)} · Step {Math.max(1, progressView.index + 1)} of {PLAN_STAGES.length}</p></div>
+          <strong>{progressView.percent}%</strong>
+          <div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan generation" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressView.percent}><span style={{ width: `${progressView.percent}%` }} /></div>
+          <ol className="generation-stages">
+            {PLAN_STAGES.map((stage, index) => <li className={index < progressView.index ? 'complete' : index === Math.max(0, progressView.index) ? 'current' : ''} key={stage.label}><span>{index < progressView.index ? <Check size={13} /> : index + 1}</span>{stage.label}</li>)}
+          </ol>
+          {isTakingLonger && <p className="generation-delay-note">Still working — AI-assisted detail checks can take a little longer. You can leave this page and return later.</p>}
+          <small>{task.data ? `Live · checked ${Math.max(0, Math.floor((progressClock.now - task.dataUpdatedAt) / 1000))}s ago · Task ${task.data.taskId.slice(0, 8)}` : 'Connecting to the background task…'}</small>
+        </section>
         {cancel.isError && errorStatus(cancel.error) !== 409 && <div className="form-alert" role="alert">{errorMessage(cancel.error)}</div>}
         <div className="generate-actions"><button className="secondary-action" type="button" disabled={cancel.isPending} onClick={() => cancel.mutate()}><Ban size={16} /> {cancel.isPending ? 'Cancelling…' : 'Cancel this generation'}</button></div>
       </div>
@@ -174,7 +224,7 @@ export function CookingDetailPage() {
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.createdAt)}</p><h1>Your plan needs a decision</h1><p>{data.explanation || 'The Cooking Agent produced a plan but needs a few answers before it can finish.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
         {strategyQuestion && <section className="detail-card"><p className="eyebrow">Inventory shortage</p><h2>{strategyQuestion.prompt}</h2><p>Reducing portions triggers a fresh inventory check. Buying opens a persisted list immediately.</p><div className="strategy-actions">{strategyQuestion.options?.map((option) => { const optionType = data.decisions?.find((decision) => decision.optionId === option.value)?.optionType; const buying = optionType === 'purchase'; return <button className={!buying && answers[strategyQuestion.questionId || ''] === option.value ? 'primary-action' : 'secondary-action'} type="button" disabled={createShoppingList.isPending || submitDecisions.isPending} key={option.value} onClick={() => { if (buying) createShoppingList.mutate(); else if (strategyQuestion.questionId) setAnswers((current) => ({ ...current, [strategyQuestion.questionId!]: option.value || '' })) }}>{buying && createShoppingList.isPending ? 'Opening shopping list…' : option.label}</button> })}</div>{reduceServings != null && <p className="field-note">Recheck at {reduceServings} {reduceServings === 1 ? 'serving' : 'servings'}. If ingredients are still missing, the shopping list keeps this reduced serving count.</p>}<small>{strategyQuestion.required ? 'Choose one option' : 'Optional'}</small></section>}
         {remainingQuestions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
-        {!questions.length && <EmptyState title="Awaiting confirmation" message="This plan is waiting for decisions that are not available on this device yet." />}
+        {!questions.length && <EmptyState title="This plan needs to be regenerated" message="FoodMind could not recover the questions for this older plan. Choose the recipes again to generate a complete plan." action={<Link className="primary-action" to="/cooking">Choose recipes again</Link>} />}
         {(submitDecisions.isError || createShoppingList.isError) && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error || createShoppingList.error)}</div>}
         {questions.length > 0 && !onlyPurchase && <button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Rechecking inventory…' : 'Reduce portions and recheck'}</button>}
       </div>
