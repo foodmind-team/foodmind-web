@@ -8181,12 +8181,14 @@ dialog.discovery-overlay {
 
 .shopping-items {
   display: grid;
+  width: 100%;
   min-width: 0;
   gap: 12px;
 }
 
 .shopping-item {
   display: grid;
+  width: 100%;
   min-width: 0;
   grid-template-columns: auto minmax(180px, 1.5fr) minmax(110px, .7fr) minmax(90px, .5fr) minmax(140px, .7fr) auto;
   align-items: end;
@@ -8260,6 +8262,10 @@ dialog.discovery-overlay {
 }
 
 @media (max-width: 640px) {
+  .shopping-detail-page {
+    overflow-x: clip;
+  }
+
   .shopping-detail-page,
   .shopping-detail-page .section-page-heading,
   .shopping-detail-page .section-page-heading > div,
@@ -8274,6 +8280,7 @@ dialog.discovery-overlay {
 
   .shopping-item input:not([type='checkbox']) {
     width: 100%;
+    max-width: 100%;
   }
 
   .inventory-lot-grid,
