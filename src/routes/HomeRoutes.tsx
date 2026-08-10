@@ -255,7 +255,7 @@ export function RecommendationDetailPage() {
     },
   })
   const save = useMutation({
-    mutationFn: async () => dataOrThrow(await api.POST('/want-to-try', { body: { sourceType: 'PLACE', sourceId: candidate!.placeId } })),
+    mutationFn: async () => dataOrThrow(await api.POST('/want-to-try', { body: { sourceType: 'PLACE', sourceId: candidate!.placeId! } })),
     onSuccess: () => { showToast('Added to Want to Try.'); void queryClient.invalidateQueries({ queryKey: ['saved'] }) },
   })
   const share = useMutation({
@@ -275,6 +275,13 @@ export function RecommendationDetailPage() {
   if (!candidate) return <div className="page"><section className="state-panel"><Sparkles /><p className="eyebrow">{sentenceCase(recommendation.data?.status)}</p><h1>No valid candidate yet.</h1><p>Your constraints protected the decision. Edit the context and try a new recommendation.</p><Link className="primary-action" to="/">Edit context</Link></section></div>
 
   const fallbackUsed = usesRecommendationFallback(recommendation.data?.status, recommendation.data?.fallbackStatus)
+  const isRecordCandidate = candidate.candidateSourceType === 'FOOD_RECORD'
+  const recordAgainQuery = new URLSearchParams({
+    type: 'food', mealName: candidate.mealName, sessionId, candidateId: candidate.candidateId,
+    ...(candidate.mealId ? { mealId: candidate.mealId } : {}),
+    ...(candidate.placeId ? { placeId: candidate.placeId } : {}),
+    ...(candidate.placeName ? { placeName: candidate.placeName } : {}),
+  }).toString()
   return (
     <div className="page recommendation-page">
       <header className="section-page-heading"><div><p className="eyebrow">Candidate {candidateIndex + 1} of {items.length} · {sentenceCase(candidate.recommendationType)}</p><h1>{candidate.mealName}</h1><p>At {candidate.placeName}{candidate.area ? ` in ${candidate.area}` : ''}</p></div><span className="rank-orbit">#{candidate.rank}</span></header>
@@ -282,9 +289,10 @@ export function RecommendationDetailPage() {
       <section className="result-card detailed-result" aria-live="polite">
         <div className="result-visual dynamic" aria-hidden="true"><span>{candidate.mealName.split(/\s+/).slice(0, 2).map((word) => word[0]).join('')}</span><small>{sentenceCase(candidate.recommendationType)}</small></div>
         <div className="result-copy">
-          <div className="result-topline"><span className="match-pill"><Sparkles size={14} /> {sentenceCase(recommendation.data?.status)}</span><button className="save-button" type="button" onClick={() => save.mutate()} disabled={save.isPending} aria-label={`Save ${candidate.placeName}`}><Bookmark size={18} /></button></div>
-          <p className="eyebrow">{candidate.placeName}</p><h2>{candidate.mealName}</h2>
-          <div className="result-meta"><span><MapPin size={15} /> {candidate.area || 'Area not provided'}</span><span>{formatMoney(candidate.price?.amount, candidate.price?.currency)}</span></div>
+          <div className="result-topline"><span className="match-pill"><Sparkles size={14} /> {sentenceCase(recommendation.data?.status)}</span>{!isRecordCandidate && candidate.placeId && <button className="save-button" type="button" onClick={() => save.mutate()} disabled={save.isPending} aria-label={`Save ${candidate.placeName || candidate.mealName}`}><Bookmark size={18} /></button>}</div>
+          <p className="eyebrow">{candidate.placeName || (isRecordCandidate ? 'Saved food record' : 'Place not provided')}</p><h2>{candidate.mealName}</h2>
+          <div className="result-meta"><span><MapPin size={15} /> {candidate.area || 'Area not provided'}</span><span>{candidate.priceKind === 'LAST_RECORDED' ? 'Last recorded price: ' : ''}{formatMoney(candidate.price?.amount, candidate.price?.currency)}</span></div>
+          {isRecordCandidate && <p className="eyebrow">Historical record — current availability is unverified.</p>}
           <p className="result-description">{candidate.explanation}</p>
           <div className="signal-list">{candidate.reasonCodes.map((reason) => <span key={reason}><Check size={14} /> {reasonLabels[reason] || sentenceCase(reason)}</span>)}</div>
           {(feedback.isError || save.isError || share.isError || rerecommend.isError) && <div className="inline-error" role="alert">{errorMessage(feedback.error || save.error || share.error || rerecommend.error)}</div>}
@@ -297,7 +305,11 @@ export function RecommendationDetailPage() {
         <section className="group-card"><p className="eyebrow">Share the choice</p><h2>Bring your group in.</h2><label>Group<select value={shareGroupId} onChange={(event) => setShareGroupId(event.target.value)}><option value="">Choose a group</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label><button className="primary-action" type="button" disabled={!shareGroupId || share.isPending} onClick={() => share.mutate()}><Send size={17} /> Share recommendation</button></section>
         <section className="learn-card"><p className="eyebrow">Start a fresh decision</p><h2>Need an entirely new set?</h2><p>A true re-recommendation records your request and creates a new linked session.</p><button className="secondary-action inverse" type="button" disabled={rerecommend.isPending} onClick={() => rerecommend.mutate()}><WandSparkles size={17} /> Generate a new session</button></section>
       </div>
-      <div className="contextual-links"><Link to={`/records/new?type=food&mealId=${candidate.mealId}&mealName=${encodeURIComponent(candidate.mealName)}&placeId=${candidate.placeId}&placeName=${encodeURIComponent(candidate.placeName)}&sessionId=${sessionId}&candidateId=${candidate.candidateId}`}><ChefHat size={17} /> Record this meal later</Link><Link to={`/catalogue/place/${candidate.placeId}`}>View place details <ArrowRight size={15} /></Link></div>
+      <div className="contextual-links">
+        {isRecordCandidate && candidate.foodRecordId && <Link to={`/records/food/${candidate.foodRecordId}`}><ChefHat size={17} /> Open original record</Link>}
+        <Link to={`/records/new?${recordAgainQuery}`}><ChefHat size={17} /> Record this meal later</Link>
+        {candidate.placeId && <Link to={`/catalogue/place/${candidate.placeId}`}>View place details <ArrowRight size={15} /></Link>}
+      </div>
     </div>
   )
 }

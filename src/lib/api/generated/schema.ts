@@ -3923,16 +3923,25 @@ export interface components {
         RecommendationCandidateResponse: {
             /** Format: uuid */
             candidateId: string;
+            /** @enum {string} */
+            candidateSourceType: "PLACE_MEAL" | "FOOD_RECORD";
             /** Format: uuid */
-            placeMealId: string;
+            placeMealId?: string | null;
             /** Format: uuid */
-            mealId: string;
+            foodRecordId?: string | null;
+            /** Format: uuid */
+            mealId?: string | null;
             mealName: string;
             /** Format: uuid */
-            placeId: string;
-            placeName: string;
-            area?: string;
+            placeId?: string | null;
+            placeName?: string | null;
+            area?: string | null;
             price?: components["schemas"]["RecommendationMoney"];
+            /** @enum {string} */
+            priceKind?: "CURRENT" | "LAST_RECORDED";
+            recordOwnerDisplayName?: string | null;
+            /** Format: date-time */
+            recordOccurredAt?: string | null;
             /** @enum {string} */
             recommendationType: "PERSONAL" | "EXPLORATORY" | "GROUP_INSPIRED";
             rank: number;

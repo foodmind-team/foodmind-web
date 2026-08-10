@@ -1704,11 +1704,8 @@ components:
       type: object
       required:
         - candidateId
-        - placeMealId
-        - mealId
+        - candidateSourceType
         - mealName
-        - placeId
-        - placeName
         - recommendationType
         - rank
         - reasonCodes
@@ -1717,23 +1714,45 @@ components:
         candidateId:
           type: string
           format: uuid
+        candidateSourceType:
+          type: string
+          enum: [PLACE_MEAL, FOOD_RECORD]
         placeMealId:
           type: string
           format: uuid
+          nullable: true
+        foodRecordId:
+          type: string
+          format: uuid
+          nullable: true
         mealId:
           type: string
           format: uuid
+          nullable: true
         mealName:
           type: string
         placeId:
           type: string
           format: uuid
+          nullable: true
         placeName:
           type: string
+          nullable: true
         area:
           type: string
+          nullable: true
         price:
           $ref: '#/components/schemas/RecommendationMoney'
+        priceKind:
+          type: string
+          enum: [CURRENT, LAST_RECORDED]
+        recordOwnerDisplayName:
+          type: string
+          nullable: true
+        recordOccurredAt:
+          type: string
+          format: date-time
+          nullable: true
         recommendationType:
           type: string
           enum:
