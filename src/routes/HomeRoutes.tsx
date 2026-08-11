@@ -13,10 +13,6 @@ import { clampCandidateIndex, prepareCommand, usesRecommendationFallback, type P
 import { formatMoney, sentenceCase, toLocalDateTimeValue } from '../lib/format'
 
 type Recommendation = Schema<'RecommendationResponse'>
-type RuntimeRecommendation = Omit<Recommendation, 'status' | 'fallbackStatus'> & {
-  status: Recommendation['status'] | 'SUCCEEDED' | 'FAILED'
-  fallbackStatus: Recommendation['fallbackStatus'] | 'NOT_REQUIRED' | 'FAILED'
-}
 const contextSchema = z.object({
   groupId: z.string(),
   mealType: z.string().max(40),
@@ -112,7 +108,7 @@ export function HomePage() {
         body: input.body,
         params: { header: { 'Idempotency-Key': input.key } },
       })
-      return dataOrThrow<Recommendation>(result) as RuntimeRecommendation
+      return dataOrThrow<Recommendation>(result)
     },
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.recommendations.detail(result.sessionId), result)
@@ -241,7 +237,7 @@ export function RecommendationDetailPage() {
   const [shareGroupId, setShareGroupId] = useState('')
   const recommendation = useQuery({
     queryKey: queryKeys.recommendations.detail(sessionId),
-    queryFn: async () => dataOrThrow<Recommendation>(await api.GET('/recommendations/{sessionId}', { params: { path: { sessionId } } })) as RuntimeRecommendation,
+    queryFn: async () => dataOrThrow<Recommendation>(await api.GET('/recommendations/{sessionId}', { params: { path: { sessionId } } })),
   })
   const items = recommendation.data?.items || recommendation.data?.candidates || []
   const candidate = items[candidateIndex]

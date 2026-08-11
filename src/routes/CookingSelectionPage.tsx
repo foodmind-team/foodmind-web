@@ -82,10 +82,24 @@ export function CookingSelectPage() {
       navigate(`/cooking/${plan.planId}`)
     },
   })
+  const generateNow = useMutation({
+    mutationFn: async (input: { body: Schema<'GenerateCookingPlanRequest'>; key: string }) => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/generate', { body: input.body, params: { header: { 'Idempotency-Key': input.key } } })),
+    onSuccess: (plan) => {
+      command.current = null
+      queryClient.setQueryData(queryKeys.cooking.detail(plan.planId), plan)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
+      navigate(`/cooking/${plan.planId}`)
+    },
+  })
   const submit = () => {
     if (!selectedRecipes.length || generate.isPending) return
     command.current = prepareCommand(command.current, body)
     generate.mutate({ body, key: command.current.key })
+  }
+  const submitNow = () => {
+    if (!selectedRecipes.length || generateNow.isPending) return
+    command.current = prepareCommand(command.current, body)
+    generateNow.mutate({ body, key: command.current.key })
   }
 
   return (
@@ -102,9 +116,10 @@ export function CookingSelectPage() {
         <div className="selection-summary"><span>{selectedRecipes.length}</span><div><strong>{selectedRecipes.length === 1 ? 'dish selected' : 'dishes selected'}</strong><small>Real inventory will be checked</small></div></div>
         <label><Users size={15} /><span>Servings</span><input type="number" min="1" max="24" value={effectiveServings} onChange={(event) => { setServingsTouched(true); setServings(Math.max(1, Math.min(24, Number(event.target.value) || 1))) }} /></label>
         <label><Clock3 size={15} /><span>Time limit</span><input type="number" min="1" max="1440" value={maxMinutes} onChange={(event) => setMaxMinutes(event.target.value)} placeholder="Any" /></label>
-        <button className="generate-button" type="button" disabled={!selectedRecipes.length || generate.isPending} onClick={submit}>{generate.isPending ? 'Submitting to Cooking Agent…' : <>Generate plan <ArrowRight size={17} /></>}</button>
+        <button className="generate-button" type="button" disabled={!selectedRecipes.length || generate.isPending || generateNow.isPending} onClick={submit}>{generate.isPending ? 'Submitting to Cooking Agent…' : <>Generate plan <ArrowRight size={17} /></>}</button>
+        <button className="secondary-action" type="button" disabled={!selectedRecipes.length || generate.isPending || generateNow.isPending} onClick={submitNow}>{generateNow.isPending ? 'Generating now…' : 'Generate now'}</button>
       </section>
-      {generate.isError && <div className="form-alert selection-error" role="alert">{errorMessage(generate.error)}</div>}
+      {(generate.isError || generateNow.isError) && <div className="form-alert selection-error" role="alert">{errorMessage(generate.error || generateNow.error)}</div>}
     </div>
   )
 }

@@ -107,6 +107,17 @@ export function CookingDetailPage() {
       navigate(`/cooking/${result.planId}`)
     },
   })
+  const submitDecisionsNow = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/decisions', {
+      params: { path: { planId }, header: { 'Idempotency-Key': crypto.randomUUID() } },
+      body: Object.entries(answers).map(([questionId, value]) => ({ questionId, value })),
+    })),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.cooking.detail(result.planId), result)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
+      navigate(`/cooking/${result.planId}`)
+    },
+  })
   const autoShoppingPlan = useRef<string | null>(null)
   useEffect(() => {
     const data = plan.data
@@ -172,11 +183,11 @@ export function CookingDetailPage() {
       <div className="page section-page cooking-result-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.createdAt)}</p><h1>Your plan needs a decision</h1><p>{data.explanation || 'The Cooking Agent produced a plan but needs a few answers before it can finish.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
-        {strategyQuestion && <section className="detail-card"><p className="eyebrow">Inventory shortage</p><h2>{strategyQuestion.prompt}</h2><p>Reducing portions triggers a fresh inventory check. Buying opens a persisted list immediately.</p><div className="strategy-actions">{strategyQuestion.options?.map((option) => { const optionType = data.decisions?.find((decision) => decision.optionId === option.value)?.optionType; const buying = optionType === 'purchase'; return <button className={!buying && answers[strategyQuestion.questionId || ''] === option.value ? 'primary-action' : 'secondary-action'} type="button" disabled={createShoppingList.isPending || submitDecisions.isPending} key={option.value} onClick={() => { if (buying) createShoppingList.mutate(); else if (strategyQuestion.questionId) setAnswers((current) => ({ ...current, [strategyQuestion.questionId!]: option.value || '' })) }}>{buying && createShoppingList.isPending ? 'Opening shopping list…' : option.label}</button> })}</div>{reduceServings != null && <p className="field-note">Recheck at {reduceServings} {reduceServings === 1 ? 'serving' : 'servings'}. If ingredients are still missing, the shopping list keeps this reduced serving count.</p>}<small>{strategyQuestion.required ? 'Choose one option' : 'Optional'}</small></section>}
+        {strategyQuestion && <section className="detail-card"><p className="eyebrow">Inventory shortage</p><h2>{strategyQuestion.prompt}</h2><p>Reducing portions triggers a fresh inventory check. Buying opens a persisted list immediately.</p><div className="strategy-actions">{strategyQuestion.options?.map((option) => { const optionType = data.decisions?.find((decision) => decision.optionId === option.value)?.optionType; const buying = optionType === 'purchase'; return <button className={!buying && answers[strategyQuestion.questionId || ''] === option.value ? 'primary-action' : 'secondary-action'} type="button" disabled={createShoppingList.isPending || submitDecisions.isPending || submitDecisionsNow.isPending} key={option.value} onClick={() => { if (buying) createShoppingList.mutate(); else if (strategyQuestion.questionId) setAnswers((current) => ({ ...current, [strategyQuestion.questionId!]: option.value || '' })) }}>{buying && createShoppingList.isPending ? 'Opening shopping list…' : option.label}</button> })}</div>{reduceServings != null && <p className="field-note">Recheck at {reduceServings} {reduceServings === 1 ? 'serving' : 'servings'}. If ingredients are still missing, the shopping list keeps this reduced serving count.</p>}<small>{strategyQuestion.required ? 'Choose one option' : 'Optional'}</small></section>}
         {remainingQuestions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
         {!questions.length && <EmptyState title="Awaiting confirmation" message="This plan is waiting for decisions that are not available on this device yet." />}
-        {(submitDecisions.isError || createShoppingList.isError) && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error || createShoppingList.error)}</div>}
-        {questions.length > 0 && !onlyPurchase && <button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Rechecking inventory…' : 'Reduce portions and recheck'}</button>}
+        {(submitDecisions.isError || submitDecisionsNow.isError || createShoppingList.isError) && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error || submitDecisionsNow.error || createShoppingList.error)}</div>}
+        {questions.length > 0 && !onlyPurchase && <div className="generate-actions"><button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending || submitDecisionsNow.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Rechecking inventory…' : reduceServings != null ? 'Reduce portions and recheck' : 'Recheck in background'}</button><button className="secondary-action" type="button" disabled={requiredMissing || submitDecisions.isPending || submitDecisionsNow.isPending} onClick={() => submitDecisionsNow.mutate()}>{submitDecisionsNow.isPending ? 'Rechecking now…' : reduceServings != null ? 'Reduce portions now' : 'Recheck now'}</button></div>}
       </div>
     )
   }

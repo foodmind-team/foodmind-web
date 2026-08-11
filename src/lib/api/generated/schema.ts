@@ -3956,18 +3956,27 @@ export interface components {
             sessionId: string;
             traceId: string;
             /** @enum {string} */
-            status: "FALLBACK_SUCCEEDED" | "NO_VALID_CANDIDATE";
-            /** @example NOT_REQUESTED */
-            modelStatus: string;
+            status: "CREATED" | "PROCESSING" | "SUCCEEDED" | "FALLBACK_SUCCEEDED" | "NO_VALID_CANDIDATE" | "FAILED";
+            /**
+             * @description SUCCEEDED requires modelVersion; every other state permits modelVersion to be absent.
+             * @enum {string}
+             */
+            modelStatus: "NOT_REQUESTED" | "PENDING" | "SUCCEEDED" | "INSUFFICIENT_DATA" | "UNAVAILABLE" | "TIMED_OUT" | "INVALID_RESPONSE" | "FAILED";
             modelVersion?: string | null;
             /** @enum {string} */
-            fallbackStatus: "SUCCEEDED" | "NO_VALID_CANDIDATE";
-            /** @example fallback-v1 */
-            fallbackVersion: string;
+            fallbackStatus: "NOT_STARTED" | "NOT_REQUIRED" | "SUCCEEDED" | "NO_VALID_CANDIDATE" | "FAILED";
+            /**
+             * @description Absent for NOT_STARTED and NOT_REQUIRED; present for a fallback terminal state.
+             * @example fallback-v1
+             */
+            fallbackVersion?: string | null;
             /** Format: date-time */
             createdAt?: string;
-            /** Format: date-time */
-            completedAt?: string;
+            /**
+             * Format: date-time
+             * @description Absent while status is CREATED or PROCESSING; present for every terminal status.
+             */
+            completedAt?: string | null;
             items: components["schemas"]["RecommendationCandidateResponse"][];
             /** @description Backward-compatible alias for items. */
             candidates?: components["schemas"]["RecommendationCandidateResponse"][];

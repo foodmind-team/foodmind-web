@@ -36,6 +36,7 @@ describe('inventory expiry date', () => {
     let currentLot = { ...lot, expiryDate: null as string | null }
     server.use(
       http.get(`${origin}/api/v1/inventory/lots`, () => HttpResponse.json({ items: [currentLot], page: 0, size: 100, totalItems: 1, totalPages: 1, hasNext: false })),
+      http.get(`${origin}/api/v1/inventory/lots/${lotId}`, () => HttpResponse.json(currentLot)),
       http.put(`${origin}/api/v1/inventory/lots/${lotId}`, async ({ request }) => {
         body = await request.json() as Record<string, unknown>
         currentLot = { ...lot, quantity: 450, available: 450, expiryDate: '2026-08-21', version: 1 }

@@ -82,6 +82,16 @@ function InventoryLotCard({ lot }: { lot: Schema<'InventoryLotResponse'> }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<LotDraft>({ ingredientName: lot.ingredientName, quantity: String(lot.quantity), unit: lot.unit, expiryDate: lot.expiryDate || '' })
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() })
+  const openEditor = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'InventoryLotResponse'>>(await api.GET('/inventory/lots/{lotId}', {
+      params: { path: { lotId: lot.lotId } },
+    })),
+    onSuccess: (detail) => {
+      queryClient.setQueryData(queryKeys.inventory.detail(detail.lotId), detail)
+      setDraft({ ingredientName: detail.ingredientName, quantity: String(detail.quantity), unit: detail.unit, expiryDate: detail.expiryDate || '' })
+      setEditing(true)
+    },
+  })
   const update = useMutation({
     mutationFn: async () => dataOrThrow<Schema<'InventoryLotResponse'>>(await api.PUT('/inventory/lots/{lotId}', {
       params: { path: { lotId: lot.lotId }, header: { 'If-Match': `"${lot.version}"` } },
@@ -109,9 +119,9 @@ function InventoryLotCard({ lot }: { lot: Schema<'InventoryLotResponse'> }) {
         <div className="recipe-card-actions"><button className="primary-action" type="button" disabled={update.isPending} onClick={() => update.mutate()}><Check size={15} /> Save</button><button className="secondary-action" type="button" onClick={() => setEditing(false)}><X size={15} /> Cancel</button></div>
       </> : <>
         <div><p className="eyebrow">{lot.expiryDate ? `Expires ${lot.expiryDate}` : 'No expiry date'}</p><h2>{lot.ingredientName}</h2><p><strong>{lot.available} {lot.unit}</strong> available · {lot.reserved} reserved</p></div>
-        <div className="recipe-card-actions"><button className="text-button" type="button" onClick={() => setEditing(true)}><Pencil size={15} /> Edit</button><button className="text-button danger-text" type="button" disabled={archive.isPending} onClick={() => archive.mutate()}><Archive size={15} /> Archive</button></div>
+        <div className="recipe-card-actions"><button className="text-button" type="button" disabled={openEditor.isPending} onClick={() => openEditor.mutate()}><Pencil size={15} /> {openEditor.isPending ? 'Opening…' : 'Edit'}</button><button className="text-button danger-text" type="button" disabled={archive.isPending} onClick={() => archive.mutate()}><Archive size={15} /> Archive</button></div>
       </>}
-      {(update.isError || archive.isError) && <div className="form-alert" role="alert">{errorMessage(update.error || archive.error)}</div>}
+      {(openEditor.isError || update.isError || archive.isError) && <div className="form-alert" role="alert">{errorMessage(openEditor.error || update.error || archive.error)}</div>}
     </article>
   )
 }
