@@ -30,11 +30,11 @@ npm run validate
 npm run test:e2e
 ```
 
-The deterministic unit/component/API suite uses synthetic MSW data. The browser suite intercepts only the documented `/api/v1` surface plus the one synthetic presigned storage URL. It checks authenticated routing, recommendation behavior, backend-selected chat routing, the credential-free media lifecycle, URL-backed filters, mandatory responsive widths, data-rich analytics/record layouts, and WCAG 2.2 AA serious/critical findings across primary destinations. Its screenshots are written into `test-results/` for CI review. Install Chromium once with `npx playwright install chromium` if the local Playwright cache is empty.
+The deterministic unit/component suite uses synthetic MSW data. The Playwright suite is the fast browser regression gate; release acceptance additionally runs the documented manual real-stack scenario without route interception. It checks authenticated routing, recommendation behavior, backend-selected chat routing, the credential-free media lifecycle, URL-backed filters, responsive widths, data-rich analytics/record layouts, and WCAG 2.2 AA serious/critical findings. Screenshots are written into `test-results/` for CI review. Install Chromium once with `npx playwright install chromium` if the local Playwright cache is empty.
 
 ## Backend contract workflow
 
-`contracts/backend-openapi-v1.yaml` is the accepted Web snapshot. `npm run api:check` regenerates into a temporary directory and fails on drift. `npm run api:coverage` also fails if a snapshot operation has neither a production call site nor an explicit exception in `contracts/backend-api-coverage.json`, or when an exception becomes stale. The current client has production call sites for every snapshot operation and therefore has no coverage exceptions. An intentional update must reference a backend commit whose committed OpenAPI file exactly matches its worktree:
+`contracts/backend-openapi-v1.yaml` is the accepted Web snapshot. `npm run api:check` verifies the snapshot SHA-256, its exact backend commit and path, the current sibling backend OpenAPI source, and regenerated TypeScript. `npm run api:coverage` fails if any of the 83 snapshot operations lacks a production call site or if an exception is added; the current exception list is empty. An intentional update must reference a backend commit whose committed OpenAPI file exactly matches its worktree:
 
 ```powershell
 npm run api:snapshot -- <backend-commit>
@@ -42,7 +42,7 @@ npm run api:generate
 npm run api:check
 ```
 
-The generator applies one documented compatibility correction to the backend's broken chat `422` schema reference. Recommendation success values are widened only at the route boundary until the backend contract is corrected.
+The generator applies one documented compatibility correction to the backend's legacy chat `422` schema reference. Recommendation enums and nullable lifecycle fields are generated directly from the corrected backend contract; route code must not widen them with manual casts.
 
 ## Production build
 
