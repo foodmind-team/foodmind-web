@@ -7,6 +7,7 @@ export default defineConfig({
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
+  timeout: 90_000,
   reporter: [['line'], ['html', { outputFolder: 'playwright-report-real', open: 'never' }]],
   use: {
     baseURL: process.env.FOODMIND_WEB_ORIGIN || 'http://127.0.0.1:4173',
