@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'jsdom',
-      exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
+      exclude: ['e2e/**', 'e2e-real/**', 'node_modules/**', 'dist/**'],
       environmentOptions: { jsdom: { url: 'http://localhost:3000' } },
       globals: true,
       setupFiles: ['./src/test/setup.ts'],
