@@ -28,7 +28,7 @@ export function ProfilePage() {
   const [displayName, setDisplayName] = useState(user?.displayName || '')
   const [timeZone, setTimeZone] = useState(user?.timeZone || '')
   const activeTab = searchParams.get('tab') === 'activity' ? 'activity' : searchParams.get('tab') === 'account' ? 'account' : 'overview'
-  const recommendations = useQuery({ queryKey: queryKeys.recommendations.history(), queryFn: async () => dataOrThrow<Schema<'RecommendationHistoryResponse'>>(await api.GET('/recommendations/history', { params: { query: { page: 0, size: 5 } } })) })
+  const recommendations = useQuery({ queryKey: queryKeys.recommendations.history(), queryFn: async () => dataOrThrow<Schema<'RecommendationHistoryResponse'>>(await api.GET('/recommendations/history', { params: { query: { page: 0, size: 5 } } })), enabled: activeTab === 'activity' })
   const recommendationItems = (recommendations.data?.items || []) as Schema<'RecommendationSessionSummary'>[]
   const update = useMutation({
     mutationFn: async () => dataOrThrow<Schema<'CurrentUserResponse'>>(await api.PATCH('/users/me', { body: { displayName, timeZone } })),

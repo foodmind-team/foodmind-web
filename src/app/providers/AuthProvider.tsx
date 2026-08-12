@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAccessSession()
     setUser(null)
     setStatus('anonymous')
+    queryClient.cancelQueries()
     queryClient.clear()
   }, [])
 
