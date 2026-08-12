@@ -8,6 +8,7 @@ import {
   Compass,
   Home,
   Leaf,
+  LogOut,
   PackageOpen,
   Plus,
   Search,
@@ -16,7 +17,7 @@ import {
   Users,
   Utensils,
 } from 'lucide-react'
-import { useEffect, useState, type ComponentType, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../app/providers/AuthProvider'
 
@@ -60,11 +61,13 @@ function Navigation({ className, items, label }: { className: string; items: Nav
 }
 
 export function AppShell() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [online, setOnline] = useState(navigator.onLine)
   const [globalQuery, setGlobalQuery] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const isCooking = /^\/(cooking|inventory|shopping-lists)(\/|$)/.test(location.pathname)
   const showMobileRecordAction = !/^\/(cooking|inventory|shopping-lists|chat|records|saved\/recipes)(\/|$)/.test(location.pathname)
   const displayName = user?.displayName || 'FoodMind user'
@@ -84,6 +87,14 @@ export function AppShell() {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false)
+    }
+    if (menuOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
 
   const searchFoodMind = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -152,9 +163,15 @@ export function AppShell() {
               <Bot size={19} /><span>Ask</span>
             </NavLink>
 
-            <Link className="avatar-button" to="/me" aria-label={`Open ${displayName}'s profile`}>
-              {initial}
-            </Link>
+            <div className="avatar-menu" ref={menuRef}>
+              <button className="avatar-button" type="button" aria-label={`${displayName}'s account menu`} onClick={() => setMenuOpen((open) => !open)}>
+                {initial}
+              </button>
+              {menuOpen && <div className="avatar-dropdown">
+                <Link to="/me" onClick={() => setMenuOpen(false)}><UserRound size={16} /> Profile</Link>
+                <button type="button" onClick={() => { setMenuOpen(false); void logout(false) }}><LogOut size={16} /> Sign out</button>
+              </div>}
+            </div>
           </div>
         </header>
 
