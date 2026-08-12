@@ -107,26 +107,36 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await expect(page).toHaveURL(/\/$/)
 
     await page.goto('/cooking/import')
+    await expect(page.getByRole('heading', { name: /describe the recipes/i })).toBeVisible()
     await page.getByLabel('Recipe text').fill('Recipe: E2E Tomato Salad\n2 servings\nIngredients:\n2 tomatoes\n1 tbsp olive oil\nSteps:\n1. Slice tomatoes.\n2. Toss with olive oil.')
     await page.getByRole('button', { name: /parse recipes/i }).click()
     await expect(page).toHaveURL(/\/cooking\/import\/[0-9a-f-]+/)
     const saveImported = page.getByRole('button', { name: /save recipes and choose for cooking/i })
-    if (await saveImported.isVisible()) await saveImported.click()
+    if (await saveImported.isVisible()) {
+      await saveImported.click()
+      await expect(page).toHaveURL(/\/cooking\?selected=/)
+    }
 
     await page.goto('/')
+    await expect(page.getByRole('heading', { name: /dinner, decided with confidence/i })).toBeVisible()
+    const recommendationResponse = page.waitForResponse((response) =>
+      response.url().includes('/api/v1/recommendations/generate') && response.request().method() === 'POST',
+    )
     await page.getByRole('button', { name: /generate recommendation/i }).click()
+    await recommendationResponse
     await expect(page.locator('main')).toContainText(/recommendation|no valid|try again/i)
 
     await page.goto('/cooking')
-    const recipeChoice = page.getByRole('button', { name: recipeName, exact: true })
-    if (await recipeChoice.isVisible()) {
-      await recipeChoice.click()
-      await page.getByRole('button', { name: /generate plan/i }).click()
-      await expect(page).toHaveURL(/\/cooking\/[0-9a-f-]+/)
-      await expect(page.locator('main')).toContainText(/ready|confirmation|inventory|failed|processing/i)
-    }
+    await expect(page.getByRole('heading', { name: /what do you want to cook tonight/i })).toBeVisible()
+    const recipeChoice = page.getByRole('button', { name: `Select ${recipeName}`, exact: true })
+    await expect(recipeChoice).toBeVisible()
+    await recipeChoice.click()
+    await page.getByRole('button', { name: /generate plan/i }).click()
+    await expect(page).toHaveURL(/\/cooking\/[0-9a-f-]+/)
+    await expect(page.locator('main')).toContainText(/ready|confirmation|inventory|failed|processing/i)
 
     await page.goto('/chat')
+    await expect(page.getByRole('heading', { name: /ask foodmind/i })).toBeVisible()
     await page.getByRole('button', { name: /new chat/i }).click()
     await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/)
     await page.getByLabel('Message', { exact: true }).fill('Where can I find my saved recipes?')
