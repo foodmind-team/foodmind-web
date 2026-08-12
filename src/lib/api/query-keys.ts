@@ -51,6 +51,7 @@ export const queryKeys = {
   },
   inventory: {
     list: () => ['inventory', 'lots'] as const,
+    detail: (id: string) => ['inventory', 'lots', id] as const,
   },
   shopping: {
     list: (status?: string) => ['shopping', 'lists', status || 'ALL'] as const,

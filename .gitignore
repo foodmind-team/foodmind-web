@@ -13,6 +13,8 @@ dist-ssr
 coverage
 playwright-report
 test-results
+playwright-report-real
+test-results-real
 *.local
 
 # Editor directories and files

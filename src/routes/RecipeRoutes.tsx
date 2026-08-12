@@ -80,13 +80,13 @@ export function RecipeLibraryPage() {
 
   return (
     <div className="page section-page recipe-library-page">
-      <header className="section-page-heading"><div><p className="eyebrow">Your cooking shelf</p><h1>Recipes you can actually cook.</h1><p>Recipes are stored in your FoodMind account and are available to Web, Backend, Agent, and future Android clients.</p></div><div className="heading-actions"><Link className="primary-action" to="/saved/recipes/new"><Bot size={17} /> Add recipes with Agent</Link></div></header>
+      <header className="section-page-heading"><div><p className="eyebrow">Your cooking shelf</p><h1>Recipes you can actually cook.</h1><p>Recipes are stored in your FoodMind account and are available to Web, Android, Backend, and Agent services.</p></div><div className="heading-actions"><Link className="secondary-action" to="/saved/recipes/manual"><Plus size={17} /> Add manually</Link><Link className="primary-action" to="/saved/recipes/new"><Bot size={17} /> Import with Agent</Link></div></header>
       <SavedSectionTabs />
       <div className="local-draft-note"><Server size={17} /><span><strong>Account-synced.</strong> Cooking Plan uses these exact backend recipe IDs and never trusts browser-only ingredient snapshots.</span></div>
       <section className="recipe-toolbar" aria-label="Recipe filters"><label className="recipe-search"><Search size={17} /><span className="sr-only">Search recipes</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your recipes" /></label></section>
       {recipes.isLoading && <LoadingState label="Loading your recipes…" />}
       {recipes.isError && <ErrorState error={recipes.error} onRetry={() => void recipes.refetch()} />}
-      {recipes.isSuccess && !filtered.length && <EmptyState title="No recipe matches" message="Add a backend-synced recipe or try another search." action={<Link className="primary-action" to="/saved/recipes/new">Add recipe</Link>} />}
+      {recipes.isSuccess && !filtered.length && <EmptyState title="No recipe matches" message="Add a backend-synced recipe or try another search." action={<Link className="primary-action" to="/saved/recipes/manual">Add recipe</Link>} />}
       <section className="recipe-grid">{filtered.map((recipe, index) => <RecipeCard recipe={recipe} index={index} key={recipe.id} onRemove={() => remove.mutate(recipe)} />)}</section>
       {remove.isError && <div className="form-alert" role="alert">{errorMessage(remove.error)}</div>}
     </div>

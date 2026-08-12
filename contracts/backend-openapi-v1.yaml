@@ -1793,7 +1793,6 @@ components:
         - status
         - modelStatus
         - fallbackStatus
-        - fallbackVersion
         - items
       properties:
         sessionId:
@@ -1804,21 +1803,39 @@ components:
         status:
           type: string
           enum:
+            - CREATED
+            - PROCESSING
+            - SUCCEEDED
             - FALLBACK_SUCCEEDED
             - NO_VALID_CANDIDATE
+            - FAILED
         modelStatus:
           type: string
-          example: NOT_REQUESTED
+          enum:
+            - NOT_REQUESTED
+            - PENDING
+            - SUCCEEDED
+            - INSUFFICIENT_DATA
+            - UNAVAILABLE
+            - TIMED_OUT
+            - INVALID_RESPONSE
+            - FAILED
+          description: SUCCEEDED requires modelVersion; every other state permits modelVersion to be absent.
         modelVersion:
           type: string
           nullable: true
         fallbackStatus:
           type: string
           enum:
+            - NOT_STARTED
+            - NOT_REQUIRED
             - SUCCEEDED
             - NO_VALID_CANDIDATE
+            - FAILED
         fallbackVersion:
           type: string
+          nullable: true
+          description: Absent for NOT_STARTED and NOT_REQUIRED; present for a fallback terminal state.
           example: fallback-v1
         createdAt:
           type: string
@@ -1826,6 +1843,8 @@ components:
         completedAt:
           type: string
           format: date-time
+          nullable: true
+          description: Absent while status is CREATED or PROCESSING; present for every terminal status.
         items:
           type: array
           maxItems: 3
@@ -3965,6 +3984,7 @@ paths:
           application/json:
             schema:
               type: array
+              minItems: 1
               items:
                 $ref: '#/components/schemas/CookingQuestionAnswer'
       responses:
@@ -4014,6 +4034,7 @@ paths:
           application/json:
             schema:
               type: array
+              minItems: 1
               items:
                 $ref: '#/components/schemas/CookingQuestionAnswer'
       responses:
