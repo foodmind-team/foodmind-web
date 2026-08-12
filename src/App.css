@@ -244,6 +244,43 @@ button {
   font-weight: 800;
 }
 
+.avatar-menu {
+  position: relative;
+}
+
+.avatar-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.avatar-dropdown a,
+.avatar-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 15px;
+  font-size: 13px;
+  color: var(--ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.avatar-dropdown a:hover,
+.avatar-dropdown button:hover {
+  background: #f4f7f2;
+}
+
 main {
   min-height: calc(100vh - 78px);
 }
@@ -4776,6 +4813,16 @@ body,
   border-color: #505a50;
   color: var(--ink);
   background: #202520;
+}
+
+.avatar-dropdown {
+  background: #1d211d;
+  border-color: #303730;
+}
+
+.avatar-dropdown a:hover,
+.avatar-dropdown button:hover {
+  background: #252b25;
 }
 
 .assistant-button {
