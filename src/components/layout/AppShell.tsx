@@ -151,9 +151,7 @@ export function AppShell() {
             <NavLink className={({ isActive }) => `header-icon assistant-button${isActive ? ' active' : ''}`} to="/chat" aria-label="Ask FoodMind chatbot">
               <Bot size={19} /><span>Ask</span>
             </NavLink>
-            <Link className="header-icon add-action" to="/records/new" aria-label="Add a food or drink record">
-              <Plus size={19} />
-            </Link>
+
             <Link className="avatar-button" to="/me" aria-label={`Open ${displayName}'s profile`}>
               {initial}
             </Link>
