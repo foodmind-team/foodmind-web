@@ -124,7 +124,8 @@ export function CookingDetailPage() {
     if (data?.status !== 'NEEDS_CONFIRMATION' || autoShoppingPlan.current === data.planId) return
     const hasPurchase = data.decisions?.some((decision) => decision.optionType === 'purchase')
     const hasReduction = data.decisions?.some((decision) => decision.optionType === 'reduce_servings')
-    if (hasPurchase && !hasReduction) {
+    const hasOtherQuestions = data.confirmationQuestions?.some((question) => question.fieldPath !== 'repair_strategy')
+    if (hasPurchase && !hasReduction && !hasOtherQuestions) {
       autoShoppingPlan.current = data.planId
       createShoppingList.mutate()
     }
@@ -170,21 +171,21 @@ export function CookingDetailPage() {
     const strategyQuestion = questions.find((question) => question.fieldPath === 'repair_strategy' && question.questionId)
     // When a strategy question exists, the user chooses exactly one
     // inventory recovery path: reduce portions or buy the missing items.
-    const remainingQuestions = strategyQuestion ? [] : questions
+    const remainingQuestions = strategyQuestion
+      ? questions.filter((question) => question.questionId !== strategyQuestion.questionId)
+      : questions
     const reduceServings = strategyReduceServings(data)
-    // Only the questions actually rendered gate the submit button: when a
-    // strategy question exists, gap/assumption questions are hidden and
-    // don't block submission.
-    const gatingQuestions = strategyQuestion ? [strategyQuestion] : questions
-    const requiredMissing = gatingQuestions.some((question) => question.required && !answers[question.questionId || ''])
-    const onlyPurchase = data.decisions?.some((decision) => decision.optionType === 'purchase') && reduceServings == null
+    const requiredMissing = questions.some((question) => question.required && !answers[question.questionId || '']?.trim())
+    const onlyPurchase = data.decisions?.some((decision) => decision.optionType === 'purchase')
+      && reduceServings == null
+      && remainingQuestions.length === 0
     if (onlyPurchase && createShoppingList.isPending) return <div className="page"><LoadingState label="Opening your shopping list…" /></div>
     return (
       <div className="page section-page cooking-result-page">
         <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
         <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.createdAt)}</p><h1>Your plan needs a decision</h1><p>{data.explanation || 'The Cooking Agent produced a plan but needs a few answers before it can finish.'}</p></div><span className="cooking-mark"><ChefHat /></span></header>
         {strategyQuestion && <section className="detail-card"><p className="eyebrow">Inventory shortage</p><h2>{strategyQuestion.prompt}</h2><p>Reducing portions triggers a fresh inventory check. Buying opens a persisted list immediately.</p><div className="strategy-actions">{strategyQuestion.options?.map((option) => { const optionType = data.decisions?.find((decision) => decision.optionId === option.value)?.optionType; const buying = optionType === 'purchase'; return <button className={!buying && answers[strategyQuestion.questionId || ''] === option.value ? 'primary-action' : 'secondary-action'} type="button" disabled={createShoppingList.isPending || submitDecisions.isPending || submitDecisionsNow.isPending} key={option.value} onClick={() => { if (buying) createShoppingList.mutate(); else if (strategyQuestion.questionId) setAnswers((current) => ({ ...current, [strategyQuestion.questionId!]: option.value || '' })) }}>{buying && createShoppingList.isPending ? 'Opening shopping list…' : option.label}</button> })}</div>{reduceServings != null && <p className="field-note">Recheck at {reduceServings} {reduceServings === 1 ? 'serving' : 'servings'}. If ingredients are still missing, the shopping list keeps this reduced serving count.</p>}<small>{strategyQuestion.required ? 'Choose one option' : 'Optional'}</small></section>}
-        {remainingQuestions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.options && question.options.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
+        {remainingQuestions.map((question) => <section className="detail-card" key={question.questionId || question.fieldPath || question.prompt || 'question'}><p className="eyebrow">{question.fieldPath ? sentenceCase(question.fieldPath) : 'Question'}</p><h2>{question.prompt}</h2>{question.responseType === 'TEXT' ? <input aria-label={question.prompt} type="text" value={answers[question.questionId || ''] || ''} placeholder={question.suggestedValue ? `Suggested: ${question.suggestedValue}` : 'Enter your answer'} onChange={(event) => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: event.target.value }))} /> : question.options?.map((option) => <label className="check-control" key={option.value}><input type="radio" name={`question-${question.questionId}`} value={option.value || ''} checked={answers[question.questionId || ''] === option.value} onChange={() => question.questionId && setAnswers((current) => ({ ...current, [question.questionId!]: option.value || '' }))} /><span>{option.label}{option.suggested ? ' · suggested' : ''}</span></label>)}<small>{question.required ? 'Required' : 'Optional'} answer{question.suggestedValue ? ` · suggested: ${question.suggestedValue}` : ''}</small></section>)}
         {!questions.length && <EmptyState title="Awaiting confirmation" message="This plan is waiting for decisions that are not available on this device yet." />}
         {(submitDecisions.isError || submitDecisionsNow.isError || createShoppingList.isError) && <div className="form-alert" role="alert">{errorMessage(submitDecisions.error || submitDecisionsNow.error || createShoppingList.error)}</div>}
         {questions.length > 0 && !onlyPurchase && <div className="generate-actions"><button className="primary-action" type="button" disabled={requiredMissing || submitDecisions.isPending || submitDecisionsNow.isPending} onClick={() => submitDecisions.mutate()}>{submitDecisions.isPending ? 'Rechecking inventory…' : reduceServings != null ? 'Reduce portions and recheck' : 'Recheck in background'}</button><button className="secondary-action" type="button" disabled={requiredMissing || submitDecisions.isPending || submitDecisionsNow.isPending} onClick={() => submitDecisionsNow.mutate()}>{submitDecisionsNow.isPending ? 'Rechecking now…' : reduceServings != null ? 'Reduce portions now' : 'Recheck now'}</button></div>}
