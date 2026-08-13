@@ -183,14 +183,15 @@ describe('cooking plan async generation', () => {
       // Flush the mutation, navigation, and the first plan/task reads.
       await vi.advanceTimersByTimeAsync(100)
       await vi.waitFor(() => {
-        expect(screen.getByText('Assembling your cooking request…')).toBeInTheDocument()
-        expect(screen.getByText('2 steps completed')).toBeInTheDocument()
+        expect(screen.getByText('Preparing recipes…')).toBeInTheDocument()
+        expect(screen.getByRole('progressbar', { name: 'Cooking plan generation' })).toHaveAttribute('aria-valuenow', '8')
       })
 
       // Second poll updates the progress copy.
       await vi.advanceTimersByTimeAsync(2000)
       expect(screen.getByText('Solving the schedule')).toBeInTheDocument()
-      expect(screen.getByText('7 steps completed')).toBeInTheDocument()
+      expect(screen.getByText(/Step 5 of 6/)).toBeInTheDocument()
+      expect(screen.getByRole('progressbar', { name: 'Cooking plan generation' })).toHaveAttribute('aria-valuenow', '88')
 
       // Third poll returns 404 → stop polling and read the terminal READY plan.
       await vi.advanceTimersByTimeAsync(2000)
@@ -300,6 +301,36 @@ describe('cooking execution progress', () => {
 })
 
 describe('confirmation strategy', () => {
+  it('recovers an invalid confirmation without trapping the user', async () => {
+    const user = userEvent.setup()
+    let requests = 0
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => {
+        requests += 1
+        if (requests > 1) return HttpResponse.json(confirmationPlan)
+        return HttpResponse.json({
+          planId,
+          status: 'NEEDS_CONFIRMATION',
+          createdAt: '2026-08-02T10:00:00Z',
+          sources: [
+            { sourceId: recipeOneId, sourceType: 'USER_RECIPE' },
+            { sourceId: recipeTwoId, sourceType: 'USER_RECIPE' },
+          ],
+          confirmationQuestions: [],
+          decisions: [],
+        })
+      }),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+
+    expect(await screen.findByRole('heading', { name: 'This plan needs to be regenerated' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Regenerate this plan' })).toHaveAttribute('href', `/cooking?selected=${recipeOneId}%2C${recipeTwoId}`)
+
+    await user.click(screen.getByRole('button', { name: 'Try loading questions again' }))
+    expect(await screen.findByRole('button', { name: 'Reduce to 1 serving' })).toBeInTheDocument()
+  })
+
   it('opens a persisted shopping list immediately when purchase is selected', async () => {
     const user = userEvent.setup()
     const shoppingListId = '00000000-0000-4000-8000-000000000202'
