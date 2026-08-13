@@ -312,9 +312,10 @@ describe('confirmation strategy', () => {
     expect(await screen.findByRole('heading', { name: 'Your plan needs a decision' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reduce to 1 serving' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Buy missing ingredients' })).toBeInTheDocument()
-    // Gap/assumption detail questions are hidden when a strategy question exists.
-    expect(screen.queryByText(/step_1\.heat.*missing/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Firm tofu substitutes silken tofu/i)).not.toBeInTheDocument()
+    // Unresolved questions stay visible even when an inventory strategy is required.
+    expect(screen.getByText(/step_1\.heat.*missing/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /step_1\.heat.*missing/i })).toBeInTheDocument()
+    expect(screen.getByText(/Firm tofu substitutes silken tofu/i)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Buy missing ingredients' }))
     expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeInTheDocument()
@@ -335,9 +336,15 @@ describe('confirmation strategy', () => {
 
     renderCookingRoutes(`/cooking/${planId}`)
     await user.click(await screen.findByRole('button', { name: 'Reduce to 1 serving' }))
+    await user.type(screen.getByRole('textbox', { name: /step_1\.heat.*missing/i }), 'HIGH')
+    await user.click(screen.getByRole('radio', { name: /Accept suggested value/i }))
     await user.click(screen.getByRole('button', { name: 'Reduce portions and recheck' }))
 
-    expect(receivedBody).toEqual([{ questionId: 'repair:strategy', value: 'repair_servings_1_abc' }])
+    expect(receivedBody).toEqual(expect.arrayContaining([
+      { questionId: 'repair:strategy', value: 'repair_servings_1_abc' },
+      { questionId: 'gap:r1-step-1-heat', value: 'HIGH' },
+      { questionId: 'assumption:r1-text', value: 'accept' },
+    ]))
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
   })
 
