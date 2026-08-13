@@ -5,22 +5,18 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieCh
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { api, dataOrThrow, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
+import { localCalendarDate, localMonday } from '../lib/local-date'
 
 type Metric = Schema<'DashboardMetricResponse'>
 type ChartRow = Record<string, string | number>
 const chartColors = ['#174d38', '#f27b5b', '#83a84d', '#d4a72c', '#5e7c70', '#9c6b4f']
 
 function date(offsetDays = 0) {
-  const value = new Date()
-  value.setDate(value.getDate() + offsetDays)
-  return value.toISOString().slice(0, 10)
+  return localCalendarDate(new Date(), offsetDays)
 }
 
 function mondayOfCurrentWeek() {
-  const value = new Date()
-  const day = value.getDay() || 7
-  value.setDate(value.getDate() - day + 1)
-  return value.toISOString().slice(0, 10)
+  return localMonday(new Date())
 }
 
 function displayValue(metric: Metric) {
