@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Bookmark, Check, ChefHat, Clock3, MapPin, RotateCcw, Send, Sparkles, Users, WalletCards, WandSparkles, X } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
@@ -12,7 +12,11 @@ import { queryKeys } from '../lib/api/query-keys'
 import { clampCandidateIndex, prepareCommand, usesRecommendationFallback, type PendingCommand } from '../lib/commands'
 import { formatMoney, sentenceCase, toLocalDateTimeValue } from '../lib/format'
 
-type Recommendation = Schema<'RecommendationResponse'>
+type RecommendationCandidate = Schema<'RecommendationCandidateResponse'> & { modelScore?: number | null }
+type Recommendation = Omit<Schema<'RecommendationResponse'>, 'items' | 'candidates'> & {
+  items: RecommendationCandidate[]
+  candidates?: RecommendationCandidate[]
+}
 const contextSchema = z.object({
   groupId: z.string(),
   mealType: z.string().max(40),
@@ -239,8 +243,17 @@ export function RecommendationDetailPage() {
     queryKey: queryKeys.recommendations.detail(sessionId),
     queryFn: async () => dataOrThrow<Recommendation>(await api.GET('/recommendations/{sessionId}', { params: { path: { sessionId } } })),
   })
-  const items = recommendation.data?.items || recommendation.data?.candidates || []
+  const items = useMemo(
+    () => [...(recommendation.data?.items || recommendation.data?.candidates || [])]
+      .sort((left, right) => left.rank - right.rank),
+    [recommendation.data],
+  )
   const candidate = items[candidateIndex]
+
+  useEffect(() => {
+    setCandidateIndex(0)
+    setRejectionReason('')
+  }, [sessionId])
 
   const feedback = useMutation({
     mutationFn: async (body: Schema<'RecommendationFeedbackRequest'>) => dataOrThrow(await api.POST('/recommendations/{sessionId}/feedback', { body, params: { path: { sessionId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })),
@@ -287,8 +300,9 @@ export function RecommendationDetailPage() {
         <div className="result-copy">
           <div className="result-topline"><span className="match-pill"><Sparkles size={14} /> {sentenceCase(recommendation.data?.status)}</span>{!isRecordCandidate && candidate.placeId && <button className="save-button" type="button" onClick={() => save.mutate()} disabled={save.isPending} aria-label={`Save ${candidate.placeName || candidate.mealName}`}><Bookmark size={18} /></button>}</div>
           <p className="eyebrow">{candidate.placeName || (isRecordCandidate ? 'Saved food record' : 'Place not provided')}</p><h2>{candidate.mealName}</h2>
-          <div className="result-meta"><span><MapPin size={15} /> {candidate.area || 'Area not provided'}</span><span>{candidate.priceKind === 'LAST_RECORDED' ? 'Last recorded price: ' : ''}{formatMoney(candidate.price?.amount, candidate.price?.currency)}</span></div>
+          <div className="result-meta"><span><MapPin size={15} /> {candidate.area || 'Area not provided'}</span><span>{candidate.priceKind === 'LAST_RECORDED' ? 'Last recorded price: ' : ''}{formatMoney(candidate.price?.amount, candidate.price?.currency)}</span>{candidate.modelScore != null && <span><Sparkles size={15} /> ML match {Math.round(candidate.modelScore * 100)}%</span>}</div>
           {isRecordCandidate && <p className="eyebrow">Historical record — current availability is unverified.</p>}
+          <p className="eyebrow">Confirmed ML ranking basis</p>
           <p className="result-description">{candidate.explanation}</p>
           <div className="signal-list">{candidate.reasonCodes.map((reason) => <span key={reason}><Check size={14} /> {reasonLabels[reason] || sentenceCase(reason)}</span>)}</div>
           {(feedback.isError || save.isError || share.isError || rerecommend.isError) && <div className="inline-error" role="alert">{errorMessage(feedback.error || save.error || share.error || rerecommend.error)}</div>}
