@@ -9,12 +9,10 @@ import { useToast } from '../components/feedback/ToastProvider'
 import { api, ApiError, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
 import { formatDateTime, sentenceCase } from '../lib/format'
+import { localMonday } from '../lib/local-date'
 
 function currentMonday() {
-  const date = new Date()
-  const day = date.getDay() || 7
-  date.setDate(date.getDate() - day + 1)
-  return date.toISOString().slice(0, 10)
+  return localMonday(new Date())
 }
 
 const PROFILE_TABS = [['overview', 'Overview'], ['activity', 'Activity'], ['account', 'Account']] as const
@@ -28,7 +26,7 @@ export function ProfilePage() {
   const [displayName, setDisplayName] = useState(user?.displayName || '')
   const [timeZone, setTimeZone] = useState(user?.timeZone || '')
   const activeTab = searchParams.get('tab') === 'activity' ? 'activity' : searchParams.get('tab') === 'account' ? 'account' : 'overview'
-  const recommendations = useQuery({ queryKey: queryKeys.recommendations.history(), queryFn: async () => dataOrThrow<Schema<'RecommendationHistoryResponse'>>(await api.GET('/recommendations/history', { params: { query: { page: 0, size: 5 } } })), enabled: activeTab === 'activity' })
+  const recommendations = useQuery({ queryKey: queryKeys.recommendations.history(), queryFn: async () => dataOrThrow<Schema<'RecommendationHistoryResponse'>>(await api.GET('/recommendations/history', { params: { query: { page: 0, size: 5 } } })) })
   const recommendationItems = (recommendations.data?.items || []) as Schema<'RecommendationSessionSummary'>[]
   const update = useMutation({
     mutationFn: async () => dataOrThrow<Schema<'CurrentUserResponse'>>(await api.PATCH('/users/me', { body: { displayName, timeZone } })),

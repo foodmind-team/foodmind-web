@@ -10,6 +10,7 @@ import { deleteRecordMedia, mediaValidationMessage, uploadRecordMedia } from '..
 import { queryKeys } from '../lib/api/query-keys'
 import { quotedVersion } from '../lib/commands'
 import { formatDateTime, formatMoney, sentenceCase, toLocalDateTimeValue } from '../lib/format'
+import { localCalendarDate } from '../lib/local-date'
 
 type RecordType = 'food' | 'drink'
 type FoodRecord = Schema<'FoodRecordResponse'>
@@ -17,9 +18,7 @@ type DrinkRecord = Schema<'DrinkRecordResponse'>
 type AnyRecord = FoodRecord | DrinkRecord
 
 function defaultDate(offsetDays = 0) {
-  const date = new Date()
-  date.setDate(date.getDate() + offsetDays)
-  return date.toISOString().slice(0, 10)
+  return localCalendarDate(new Date(), offsetDays)
 }
 
 export function HistoryPage() {
