@@ -301,6 +301,36 @@ describe('cooking execution progress', () => {
 })
 
 describe('confirmation strategy', () => {
+  it('recovers an invalid confirmation without trapping the user', async () => {
+    const user = userEvent.setup()
+    let requests = 0
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => {
+        requests += 1
+        if (requests > 1) return HttpResponse.json(confirmationPlan)
+        return HttpResponse.json({
+          planId,
+          status: 'NEEDS_CONFIRMATION',
+          createdAt: '2026-08-02T10:00:00Z',
+          sources: [
+            { sourceId: recipeOneId, sourceType: 'USER_RECIPE' },
+            { sourceId: recipeTwoId, sourceType: 'USER_RECIPE' },
+          ],
+          confirmationQuestions: [],
+          decisions: [],
+        })
+      }),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+
+    expect(await screen.findByRole('heading', { name: 'This plan needs to be regenerated' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Regenerate this plan' })).toHaveAttribute('href', `/cooking?selected=${recipeOneId}%2C${recipeTwoId}`)
+
+    await user.click(screen.getByRole('button', { name: 'Try loading questions again' }))
+    expect(await screen.findByRole('button', { name: 'Reduce to 1 serving' })).toBeInTheDocument()
+  })
+
   it('opens a persisted shopping list immediately when purchase is selected', async () => {
     const user = userEvent.setup()
     const shoppingListId = '00000000-0000-4000-8000-000000000202'
