@@ -183,14 +183,15 @@ describe('cooking plan async generation', () => {
       // Flush the mutation, navigation, and the first plan/task reads.
       await vi.advanceTimersByTimeAsync(100)
       await vi.waitFor(() => {
-        expect(screen.getByText('Assembling your cooking request…')).toBeInTheDocument()
-        expect(screen.getByText('2 steps completed')).toBeInTheDocument()
+        expect(screen.getByText('Preparing recipes…')).toBeInTheDocument()
+        expect(screen.getByRole('progressbar', { name: 'Cooking plan generation' })).toHaveAttribute('aria-valuenow', '8')
       })
 
       // Second poll updates the progress copy.
       await vi.advanceTimersByTimeAsync(2000)
       expect(screen.getByText('Solving the schedule')).toBeInTheDocument()
-      expect(screen.getByText('7 steps completed')).toBeInTheDocument()
+      expect(screen.getByText(/Step 5 of 6/)).toBeInTheDocument()
+      expect(screen.getByRole('progressbar', { name: 'Cooking plan generation' })).toHaveAttribute('aria-valuenow', '88')
 
       // Third poll returns 404 → stop polling and read the terminal READY plan.
       await vi.advanceTimersByTimeAsync(2000)

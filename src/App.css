@@ -6332,6 +6332,78 @@ button.recipe-card.selected {
   font-size: 8px;
 }
 
+.generation-progress {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.generation-runtime {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.generation-stages {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generation-stages li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #69736b;
+  font-size: 9px;
+  font-weight: 720;
+}
+
+.generation-stages li > span {
+  display: grid;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid #39433b;
+  border-radius: 50%;
+}
+
+.generation-stages li.complete,
+.generation-stages li.current {
+  color: var(--ink);
+}
+
+.generation-stages li.complete > span {
+  border-color: #82925f;
+  color: #11170f;
+  background: var(--lime);
+}
+
+.generation-stages li.current > span {
+  border-color: var(--lime);
+  color: var(--lime);
+  box-shadow: 0 0 0 4px rgb(217 244 97 / 8%);
+}
+
+.generation-delay-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  border-left: 2px solid #8d9d64;
+  padding-left: 10px;
+  color: #b7c0b8;
+  font-size: 10px;
+}
+
+@media (max-width: 900px) {
+  .generation-stages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .strategy-actions {
   display: flex;
   gap: 1rem;
