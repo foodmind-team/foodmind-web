@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: './e2e/specs',
   outputDir: './test-results',
   fullyParallel: true,
+  workers: 2,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'list',

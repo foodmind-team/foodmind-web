@@ -12,6 +12,7 @@ const contractPath = resolve(webRoot, 'contracts', 'backend-openapi-v1.yaml')
 const lockPath = resolve(webRoot, 'contracts', 'backend-openapi-v1.lock.json')
 const temporaryDirectory = await mkdtemp(resolve(tmpdir(), 'foodmind-api-'))
 const temporarySchema = resolve(temporaryDirectory, 'schema.ts')
+const canonicalize = (value) => value.replaceAll('\r\n', '\n')
 
 try {
   const [contract, lockContents] = await Promise.all([
@@ -26,7 +27,7 @@ try {
     throw new Error('Backend OpenAPI lock metadata is incomplete or invalid.')
   }
 
-  const digest = createHash('sha256').update(contract).digest('hex')
+  const digest = createHash('sha256').update(canonicalize(contract)).digest('hex')
   if (digest !== lock.sha256) {
     throw new Error('Backend OpenAPI snapshot SHA-256 does not match its lock.')
   }
@@ -45,7 +46,7 @@ try {
       ['-C', backendRoot, 'show', `${lock.backendCommit}:${lock.sourcePath}`],
       { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 },
     )
-    if (committedSource.replaceAll('\r\n', '\n') !== contract.replaceAll('\r\n', '\n')) {
+    if (canonicalize(committedSource) !== canonicalize(contract)) {
       throw new Error('Backend OpenAPI snapshot differs from its locked backend commit.')
     }
   }
@@ -53,7 +54,7 @@ try {
     (existsSync(resolve(backendRoot, lock.sourcePath)) ? resolve(backendRoot, lock.sourcePath) : null)
   if (sourceInput) {
     const backendSource = await readFile(sourceInput, 'utf8')
-    if (backendSource.replaceAll('\r\n', '\n') !== contract.replaceAll('\r\n', '\n')) {
+    if (canonicalize(backendSource) !== canonicalize(contract)) {
       throw new Error('Backend OpenAPI source differs from the Web snapshot. Run api:snapshot after committing the backend contract.')
     }
   }
@@ -65,7 +66,7 @@ try {
     readFile(resolve(webRoot, 'src', 'lib', 'api', 'generated', 'schema.ts'), 'utf8'),
     readFile(temporarySchema, 'utf8'),
   ])
-  if (expected.replaceAll('\r\n', '\n') !== actual.replaceAll('\r\n', '\n')) {
+  if (canonicalize(expected) !== canonicalize(actual)) {
     throw new Error('Generated API schema is out of date. Run npm run api:generate.')
   }
   console.log(`Generated API schema and backend source match ${lock.backendCommit}.`)

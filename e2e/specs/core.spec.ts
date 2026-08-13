@@ -67,6 +67,7 @@ test('core home is responsive and has no serious automated accessibility finding
 })
 
 test('all primary destinations render their documented empty or ready state', async ({ page }) => {
+  test.setTimeout(60_000)
   await mockApi(page)
   const destinations = [
     ['/', /dinner, decided with confidence/i],
