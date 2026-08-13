@@ -101,7 +101,7 @@ export function ChatConversationPage() {
     queryFn: async () => dataOrThrow<Schema<'SearchPageResponse'>>(await api.GET('/search', { params: { query: { q: sourceQuery.trim(), page: 0, size: 10 } } })),
   })
   const send = useMutation({
-    mutationFn: async (message: string) => dataOrThrow<Schema<'ChatMessageResponse'>>(await api.POST('/chat/sessions/{sessionId}/messages', { body: { content: message, referenceIds: attachedSources.map((source) => source.id) }, params: { path: { sessionId } } })),
+    mutationFn: async (message: string) => dataOrThrow<Schema<'ChatMessageResponse'>>(await api.POST('/chat/sessions/{sessionId}/messages', { body: { content: message, referenceIds: attachedSources.map((source) => source.id), useSessionReferences: false }, params: { path: { sessionId } } })),
     onMutate: () => setContent(''),
     onSuccess: async () => {
       await Promise.all([

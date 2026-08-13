@@ -3948,8 +3948,10 @@ export interface components {
             reasonCodes: ("CUISINE_MATCH" | "WITHIN_BUDGET" | "SPICE_MATCH" | "NEARBY" | "NOT_RECENTLY_REPEATED" | "SIMILAR_USERS_LIKED" | "SIMILAR_TO_LIKED_MEALS" | "TRUSTED_GROUP_RATING" | "WANT_TO_TRY")[];
             /** @description Backward-compatible alias for reasonCodes. */
             reasons?: string[];
-            /** @description Allow-listed grounded text. Model or fallback scores are never used as the explanation. */
+            /** @description Allow-listed grounded text linking the model score to confirmed feature evidence; a score is never the sole explanation. */
             explanation: string;
+            /** @description Persisted ML probability for model-ranked candidates; null when deterministic fallback was used. */
+            modelScore?: number | null;
         };
         RecommendationResponse: {
             /** Format: uuid */
@@ -4521,9 +4523,15 @@ export interface components {
         };
         PostChatMessageRequest: {
             content: string;
+            /** @description Reference IDs selected for this message. An empty list is meaningful when useSessionReferences is false. */
             referenceIds?: string[];
+            /**
+             * @description When false, use only referenceIds for this message, including no references when the list is empty. When true or omitted, an empty referenceIds value inherits all active references previously shared with the session for backward compatibility.
+             * @default true
+             */
+            useSessionReferences: boolean;
             /** @enum {string|null} */
-            route?: "SEARCH" | "SUMMARY" | "COMPARE" | "NAVIGATION" | "OUT_OF_SCOPE" | null;
+            route?: "SEARCH" | "SUMMARY" | "COMPARE" | "NAVIGATION" | null;
         };
         ShareChatReferenceRequest: {
             /** @enum {string} */
