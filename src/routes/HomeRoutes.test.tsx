@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
 import { HomePage, RecommendationDetailPage } from './HomeRoutes'
@@ -56,5 +56,32 @@ describe('recommendation decision loop', () => {
     fireEvent.click(screen.getByRole('button', { name: /try another/i }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Soba set', level: 1 })).toBeInTheDocument())
     expect(mutationCalls).toBe(0)
+  })
+
+  it('confirms a permanent rejection, preserves the session, and advances locally', async () => {
+    let feedbackBody: Record<string, unknown> = {}
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    server.use(
+      http.get(`${origin}/api/v1/groups`, () => HttpResponse.json(groups)),
+      http.get(`${origin}/api/v1/recommendations/session-1`, () => HttpResponse.json(recommendation)),
+      http.post(`${origin}/api/v1/recommendations/session-1/feedback`, async ({ request }) => {
+        feedbackBody = await request.json() as Record<string, unknown>
+        return HttpResponse.json({ eventType: 'REJECTED', reasonCode: 'DO_NOT_RECOMMEND' }, { status: 201 })
+      }),
+    )
+    renderRoute('/recommendations/session-1', <RecommendationDetailPage />, '/recommendations/:sessionId')
+
+    expect(await screen.findByRole('heading', { name: 'Laksa bowl', level: 1 })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /never recommend this/i }))
+
+    await waitFor(() => expect(feedbackBody).toEqual({
+      eventType: 'REJECTED',
+      candidateId: 'candidate-1',
+      reasonCode: 'DO_NOT_RECOMMEND',
+    }))
+    expect(confirm).toHaveBeenCalledWith('Hide this meal at this place from all future recommendations? This cannot be undone.')
+    expect(await screen.findByRole('heading', { name: 'Soba set', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText('Hidden from future recommendations. This saved session remains unchanged.')).toBeInTheDocument()
+    confirm.mockRestore()
   })
 })

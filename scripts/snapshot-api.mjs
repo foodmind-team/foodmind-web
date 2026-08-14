@@ -5,7 +5,9 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const backendRoot = resolve(webRoot, '..', 'foodmind-backend')
+const backendRoot = process.env.FOODMIND_BACKEND_ROOT
+  ? resolve(process.env.FOODMIND_BACKEND_ROOT)
+  : resolve(webRoot, '..', 'foodmind-backend')
 const sourcePath = 'src/main/resources/openapi/openapi.yaml'
 const requestedCommit = process.argv[2]
 

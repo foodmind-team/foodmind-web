@@ -3992,7 +3992,7 @@ export interface components {
             /** @enum {string} */
             eventType: "ACCEPTED" | "REJECTED" | "RERECOMMEND_REQUESTED" | "LATER_RATED" | "WOULD_EAT_AGAIN";
             /** @enum {string|null} */
-            reasonCode?: "TOO_EXPENSIVE" | "TOO_FAR" | "NOT_IN_MOOD" | "DIETARY_CONCERN" | "ALLERGEN_CONCERN" | "RECENTLY_EATEN" | "PLACE_CONCERN" | "OTHER" | null;
+            reasonCode?: "TOO_EXPENSIVE" | "TOO_FAR" | "NOT_IN_MOOD" | "DIETARY_CONCERN" | "ALLERGEN_CONCERN" | "RECENTLY_EATEN" | "PLACE_CONCERN" | "DO_NOT_RECOMMEND" | "OTHER" | null;
             rating?: number | null;
             booleanValue?: boolean | null;
             /**

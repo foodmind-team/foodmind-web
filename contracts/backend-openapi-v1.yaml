@@ -1891,6 +1891,7 @@ components:
             - ALLERGEN_CONCERN
             - RECENTLY_EATEN
             - PLACE_CONCERN
+            - DO_NOT_RECOMMEND
             - OTHER
         rating:
           type: number

@@ -258,7 +258,13 @@ export function RecommendationDetailPage() {
   const feedback = useMutation({
     mutationFn: async (body: Schema<'RecommendationFeedbackRequest'>) => dataOrThrow(await api.POST('/recommendations/{sessionId}/feedback', { body, params: { path: { sessionId }, header: { 'Idempotency-Key': crypto.randomUUID() } } })),
     onSuccess: (_result, variables) => {
-      showToast(variables.eventType === 'ACCEPTED' ? 'Choice accepted. FoodMind will use this signal.' : 'Feedback recorded.')
+      const permanentlyHidden = variables.eventType === 'REJECTED' && variables.reasonCode === 'DO_NOT_RECOMMEND'
+      showToast(permanentlyHidden
+        ? 'Hidden from future recommendations. This saved session remains unchanged.'
+        : variables.eventType === 'ACCEPTED' ? 'Choice accepted. FoodMind will use this signal.' : 'Feedback recorded.')
+      if (permanentlyHidden && candidateIndex < items.length - 1) {
+        setCandidateIndex((index) => clampCandidateIndex(index + 1, items.length))
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations.history() })
       void queryClient.invalidateQueries({ queryKey: ['analytics'] })
     },
@@ -307,7 +313,7 @@ export function RecommendationDetailPage() {
           <div className="signal-list">{candidate.reasonCodes.map((reason) => <span key={reason}><Check size={14} /> {reasonLabels[reason] || sentenceCase(reason)}</span>)}</div>
           {(feedback.isError || save.isError || share.isError || rerecommend.isError) && <div className="inline-error" role="alert">{errorMessage(feedback.error || save.error || share.error || rerecommend.error)}</div>}
           <div className="decision-actions"><button className="primary-action" type="button" disabled={feedback.isPending} onClick={() => feedback.mutate({ eventType: 'ACCEPTED', candidateId: candidate.candidateId })}><Check size={17} /> Accept this choice</button><button className="secondary-action" type="button" disabled={candidateIndex >= items.length - 1} onClick={() => setCandidateIndex((index) => clampCandidateIndex(index + 1, items.length))}><RotateCcw size={16} /> Try another</button></div>
-          <div className="reject-panel"><label>Not right tonight?<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}><option value="">Choose a reason</option>{['TOO_EXPENSIVE', 'TOO_FAR', 'NOT_IN_MOOD', 'DIETARY_CONCERN', 'ALLERGEN_CONCERN', 'RECENTLY_EATEN', 'PLACE_CONCERN', 'OTHER'].map((reason) => <option value={reason} key={reason}>{sentenceCase(reason)}</option>)}</select></label><button className="text-button danger-link" type="button" disabled={!rejectionReason || feedback.isPending} onClick={() => feedback.mutate({ eventType: 'REJECTED', candidateId: candidate.candidateId, reasonCode: rejectionReason as Schema<'RecommendationFeedbackRequest'>['reasonCode'] })}>Reject this candidate</button></div>
+          <div className="reject-panel"><label>Not right tonight?<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}><option value="">Choose a reason</option>{['TOO_EXPENSIVE', 'TOO_FAR', 'NOT_IN_MOOD', 'DIETARY_CONCERN', 'ALLERGEN_CONCERN', 'RECENTLY_EATEN', 'PLACE_CONCERN', 'OTHER'].map((reason) => <option value={reason} key={reason}>{sentenceCase(reason)}</option>)}</select></label><button className="text-button danger-link" type="button" disabled={!rejectionReason || feedback.isPending} onClick={() => feedback.mutate({ eventType: 'REJECTED', candidateId: candidate.candidateId, reasonCode: rejectionReason as Schema<'RecommendationFeedbackRequest'>['reasonCode'] })}>Reject this candidate</button><button className="text-button danger-link" type="button" disabled={feedback.isPending} onClick={() => { if (window.confirm('Hide this meal at this place from all future recommendations? This cannot be undone.')) feedback.mutate({ eventType: 'REJECTED', candidateId: candidate.candidateId, reasonCode: 'DO_NOT_RECOMMEND' }) }}>Never recommend this</button></div>
         </div>
       </section>
 
