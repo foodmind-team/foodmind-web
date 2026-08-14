@@ -1784,7 +1784,13 @@ components:
           description: Backward-compatible alias for reasonCodes.
         explanation:
           type: string
-          description: Allow-listed grounded text. Model or fallback scores are never used as the explanation.
+          description: Allow-listed grounded text linking the model score to confirmed feature evidence; a score is never the sole explanation.
+        modelScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+          description: Persisted ML probability for model-ranked candidates; null when deterministic fallback was used.
     RecommendationResponse:
       type: object
       required:
@@ -3144,11 +3150,16 @@ components:
           minLength: 1
           maxLength: 12000
         referenceIds:
+          description: Reference IDs selected for this message. An empty list is meaningful when useSessionReferences is false.
           type: array
           items:
             type: string
             format: uuid
           maxItems: 20
+        useSessionReferences:
+          description: When false, use only referenceIds for this message, including no references when the list is empty. When true or omitted, an empty referenceIds value inherits all active references previously shared with the session for backward compatibility.
+          type: boolean
+          default: true
         route:
           type: string
           nullable: true
@@ -3157,7 +3168,6 @@ components:
             - SUMMARY
             - COMPARE
             - NAVIGATION
-            - OUT_OF_SCOPE
     ShareChatReferenceRequest:
       type: object
       required:
