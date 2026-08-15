@@ -3290,6 +3290,8 @@ components:
         - correlationId
         - createdAt
         - sources
+        - suggestedQuestions
+        - suggestedDestinations
       properties:
         id:
           type: string
@@ -3335,6 +3337,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatMessageSourceResponse'
+        suggestedQuestions:
+          description: Up to three safe follow-up prompts generated for this answer.
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            maxLength: 200
+        suggestedDestinations:
+          description: Up to three allowlisted FoodMind screens relevant to the answer.
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            enum:
+              - INVENTORY
+              - SHOPPING_LISTS
+              - SAVED_RECIPES
+              - COOKING_PLANS
+              - RECOMMENDATIONS
+              - EXPLORE
     ChatSessionPageResponse:
       type: object
       required:
@@ -3818,11 +3840,12 @@ paths:
       tags:
         - Chat
       summary: Send a bounded user message and persist a grounded assistant result.
-      description: The Backend commits the user message before Agent invocation and re-authorises cited sources before storing assistant grounding links.
+      description: The Backend replays completed retries with the same Idempotency-Key, supplies bounded recent conversation turns to the Agent, and re-authorises cited sources before storing assistant grounding links. The header remains optional temporarily for older clients; clients that implement Retry should always send it.
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: sessionId
           in: path
           required: true
@@ -3851,6 +3874,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           description: Chat route is unsupported by the bounded Chat workflow.
           headers:
