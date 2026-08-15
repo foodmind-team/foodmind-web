@@ -37,7 +37,7 @@ function renderPage() {
 }
 
 describe('persisted shopping list', () => {
-  it('persists purchase details, checks the item, commits inventory, and continues', async () => {
+  it('shows only item names, checks the item, completes the list, and continues', async () => {
     const user = userEvent.setup()
     let updateBody: Record<string, unknown> | null = null
     let updateIfMatch: string | null = null
@@ -46,7 +46,7 @@ describe('persisted shopping list', () => {
       http.patch(`${origin}/api/v1/shopping-lists/${shoppingListId}/items/${itemId}`, async ({ request }) => {
         updateBody = await request.json() as Record<string, unknown>
         updateIfMatch = request.headers.get('if-match')
-        return HttpResponse.json({ ...shoppingList(true, 1), items: [{ ...shoppingList(true, 1).items[0], purchasedQuantity: 125, expiryDate: '2026-08-20' }] })
+        return HttpResponse.json(shoppingList(true, 1))
       }),
       http.post(`${origin}/api/v1/shopping-lists/${shoppingListId}/complete`, ({ request }) => {
         expect(request.headers.get('idempotency-key')).toMatch(/[0-9a-f-]{36}/)
@@ -55,13 +55,14 @@ describe('persisted shopping list', () => {
     )
 
     renderPage()
-    expect(await screen.findByRole('heading', { name: 'Buy ingredients for 4 servings.' })).toBeInTheDocument()
-    await user.clear(screen.getByLabelText('Purchased quantity'))
-    await user.type(screen.getByLabelText('Purchased quantity'), '125')
-    await user.type(screen.getByLabelText('Expiry date'), '2026-08-20')
+    expect(await screen.findByRole('heading', { name: 'Shopping list.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Firm tofu' })).toBeInTheDocument()
+    expect(screen.queryByText(/servings/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/quantity/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/expiry/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('checkbox'))
 
-    expect(updateBody).toEqual({ checked: true, purchasedQuantity: 125, unit: 'g', expiryDate: '2026-08-20' })
+    expect(updateBody).toEqual({ checked: true, purchasedQuantity: 100, unit: 'g', expiryDate: null })
     expect(updateIfMatch).toBe('"0"')
     await user.click(await screen.findByRole('button', { name: 'Everything purchased — continue' }))
     expect(await screen.findByRole('heading', { name: 'Continued Cooking Plan' })).toBeInTheDocument()
