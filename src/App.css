@@ -6632,10 +6632,6 @@ button.recipe-card.selected {
     font-size: 30px;
   }
 
-  .shopping-serving-count {
-    display: block;
-  }
-
   .mobile-search-action {
     display: none;
   }
@@ -8267,8 +8263,7 @@ dialog.discovery-overlay {
 }
 
 .inventory-create-form label,
-.inventory-lot-card label,
-.shopping-item > label:not(.shopping-check) {
+.inventory-lot-card label {
   display: grid;
   gap: 7px;
   color: var(--muted);
@@ -8277,8 +8272,7 @@ dialog.discovery-overlay {
 }
 
 .inventory-create-form input,
-.inventory-lot-card input,
-.shopping-item input:not([type='checkbox']) {
+.inventory-lot-card input {
   min-width: 0;
   min-height: 42px;
   border: 1px solid var(--line);
@@ -8291,8 +8285,7 @@ dialog.discovery-overlay {
 }
 
 .inventory-create-form input:focus,
-.inventory-lot-card input:focus,
-.shopping-item input:focus {
+.inventory-lot-card input:focus {
   border-color: var(--lime);
   box-shadow: 0 0 0 3px rgba(192, 229, 92, .1);
 }
@@ -8373,12 +8366,20 @@ dialog.discovery-overlay {
 }
 
 .shopping-item {
-  display: grid;
+  display: flex;
   width: 100%;
   min-width: 0;
-  grid-template-columns: auto minmax(180px, 1.5fr) minmax(110px, .7fr) minmax(90px, .5fr) minmax(140px, .7fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 12px;
+}
+
+.shopping-item-copy {
+  min-width: 0;
+}
+
+.shopping-item-copy h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .shopping-item.checked {
@@ -8438,13 +8439,6 @@ dialog.discovery-overlay {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .shopping-item {
-    grid-template-columns: auto 1fr 1fr;
-  }
-
-  .shopping-item-copy {
-    grid-column: span 2;
-  }
 }
 
 @media (max-width: 640px) {
@@ -8464,21 +8458,11 @@ dialog.discovery-overlay {
     overflow-wrap: anywhere;
   }
 
-  .shopping-item input:not([type='checkbox']) {
-    width: 100%;
-    max-width: 100%;
-  }
-
   .inventory-lot-grid,
   .shopping-list-grid,
   .inventory-create-form,
-  .inventory-edit-row,
-  .shopping-item {
+  .inventory-edit-row {
     grid-template-columns: 1fr;
-  }
-
-  .shopping-item-copy {
-    grid-column: auto;
   }
 
   .shopping-check {
