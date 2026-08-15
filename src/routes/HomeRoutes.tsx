@@ -209,10 +209,6 @@ export function HomePage() {
         )}
       </form>
 
-      <div className="support-grid">
-        <section className="group-card"><p className="eyebrow">Trusted groups</p><h2>{groups.isLoading ? 'Loading your groups…' : groups.data?.length ? `${groups.data.length} group${groups.data.length === 1 ? '' : 's'} ready` : 'Decide together when you are ready'}</h2><p className="section-support">Group recommendations use only evidence you are authorised to see.</p><Link className="text-button" to="/groups">Open Groups <ArrowRight size={15} /></Link></section>
-        <section className="learn-card"><p className="eyebrow">The decision loop</p><h2>Clear choice. Honest reasons.</h2><div className="learn-list"><LearnItem number="01" title="Rules filter" detail="Dietary, allergy, budget, and distance needs" /><LearnItem number="02" title="Signals rank" detail="Personal and trusted group evidence" /><LearnItem number="03" title="You decide" detail="Accept, reject, or ask for a new session" /></div></section>
-      </div>
       {(groups.isError || reference.isError || preferences.isError) && <div className="soft-warning" role="status">Some profile context could not be loaded. You can still adjust the available fields and retry.</div>}
     </div>
   )
@@ -220,10 +216,6 @@ export function HomePage() {
 
 function ContextItem({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string }) {
   return <div className="context-item"><Icon size={17} /><span><small>{label}</small><strong>{value}</strong></span></div>
-}
-
-function LearnItem({ number, title, detail }: { number: string; title: string; detail: string }) {
-  return <div className="learn-item"><span>{number}</span><p><strong>{title}</strong><small>{detail}</small></p></div>
 }
 
 const reasonLabels: Record<string, string> = {
