@@ -8490,3 +8490,24 @@ dialog.discovery-overlay {
     flex-direction: column;
   }
 }
+.decision-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr);
+  gap: 1.5rem;
+  margin: 1rem 0;
+  padding: 1.4rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 24px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 92%, var(--accent)), var(--surface));
+}
+
+.decision-profile h2 { margin: .25rem 0 .5rem; }
+.decision-profile p { margin: 0; color: var(--muted); }
+.decision-factor-list { display: flex; flex-wrap: wrap; align-content: center; gap: .6rem; }
+.decision-factor-list span { display: inline-flex; align-items: center; gap: .35rem; padding: .55rem .75rem; border-radius: 999px; background: var(--surface); }
+.decision-factor-list small { width: 100%; color: var(--muted); }
+.sync-status { display: block; margin-top: .65rem; color: var(--accent); }
+
+@media (max-width: 720px) {
+  .decision-profile { grid-template-columns: 1fr; }
+}
