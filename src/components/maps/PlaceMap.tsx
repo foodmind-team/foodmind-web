@@ -19,8 +19,8 @@ export function PlaceMap({ place }: { place: Place }) {
   useEffect(() => {
     if (!container.current || !coordinates) return
     const current = L.map(container.current, { scrollWheelZoom: false }).setView([coordinates.latitude, coordinates.longitude], 16)
-    L.tileLayer.wms('https://www.onemap.gov.sg/maps/service?', {
-      layers: 'Default', format: 'image/png', version: '1.0.0', crs: L.CRS.EPSG4326, maxZoom: 18, minZoom: 11,
+    L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
+      maxZoom: 18, minZoom: 11,
       attribution: '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a> © Singapore Land Authority',
     }).addTo(current)
     L.marker([coordinates.latitude, coordinates.longitude]).addTo(current).bindPopup(place.name)
