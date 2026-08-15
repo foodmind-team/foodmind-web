@@ -27,6 +27,8 @@
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
     "@tanstack/react-query": "^5.101.4",
+    "@types/leaflet": "^1.9.22",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.27.0",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.7",
@@ -45,6 +47,7 @@
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/recharts": "^1.8.29",
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "^4.1.10",
     "axe-core": "^4.12.1",
