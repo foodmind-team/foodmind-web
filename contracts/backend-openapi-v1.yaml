@@ -760,6 +760,31 @@ components:
           minimum: -180
           maximum: 180
           example: 103.831800
+    WalkingRouteResponse:
+      type: object
+      required: [origin, destination, distanceMeters, durationSeconds, coordinates]
+      properties:
+        origin:
+          $ref: '#/components/schemas/CatalogueCoordinates'
+        destination:
+          $ref: '#/components/schemas/CatalogueCoordinates'
+        distanceMeters:
+          type: integer
+          format: int64
+          minimum: 0
+        durationSeconds:
+          type: integer
+          format: int64
+          minimum: 0
+        coordinates:
+          type: array
+          description: GeoJSON LineString positions in longitude, latitude order.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: number
     CataloguePlaceObservation:
       type: object
       required:
@@ -5976,6 +6001,52 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /catalogue/places/{id}/walking-route:
+    get:
+      tags:
+        - Catalogue
+      summary: Return a transient OneMap walking route to an active controlled place.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: originLatitude
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: originLongitude
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      responses:
+        '200':
+          description: Walking route. Origin is not stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalkingRouteResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: OneMap walking directions are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
   /catalogue/products/{id}:
     get:
       tags:

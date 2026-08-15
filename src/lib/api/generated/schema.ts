@@ -2417,6 +2417,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalogue/places/{id}/walking-route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return a transient OneMap walking route to an active controlled place. */
+        get: {
+            parameters: {
+                query: {
+                    originLatitude: number;
+                    originLongitude: number;
+                };
+                header?: {
+                    /**
+                     * @description Optional client-generated correlation identifier.
+                     * @example postman-correlation-test
+                     */
+                    "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                };
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Walking route. Origin is not stored. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WalkingRouteResponse"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                404: components["responses"]["NotFound"];
+                /** @description OneMap walking directions are unavailable. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalogue/products/{id}": {
         parameters: {
             query?: never;
@@ -3415,6 +3473,16 @@ export interface components {
             /** @example 103.8318 */
             longitude: number;
         } | null;
+        WalkingRouteResponse: {
+            origin: components["schemas"]["CatalogueCoordinates"];
+            destination: components["schemas"]["CatalogueCoordinates"];
+            /** Format: int64 */
+            distanceMeters: number;
+            /** Format: int64 */
+            durationSeconds: number;
+            /** @description GeoJSON LineString positions in longitude, latitude order. */
+            coordinates: number[][];
+        };
         CataloguePlaceObservation: {
             /**
              * Format: uuid
