@@ -488,7 +488,7 @@ export interface paths {
         put?: never;
         /**
          * Send a bounded user message and persist a grounded assistant result.
-         * @description The Backend commits the user message before Agent invocation and re-authorises cited sources before storing assistant grounding links.
+         * @description The Backend replays completed retries with the same Idempotency-Key, supplies bounded recent conversation turns to the Agent, and re-authorises cited sources before storing assistant grounding links. The header remains optional temporarily for older clients; clients that implement Retry should always send it.
          */
         post: {
             parameters: {
@@ -499,6 +499,8 @@ export interface paths {
                      * @example postman-correlation-test
                      */
                     "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+                    /** @description Stable key for retrying commands that must not duplicate work. */
+                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 };
                 path: {
                     sessionId: string;
@@ -524,6 +526,7 @@ export interface paths {
                 400: components["responses"]["BadRequest"];
                 401: components["responses"]["Unauthorized"];
                 404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
                 /** @description Chat route is unsupported by the bounded Chat workflow. */
                 422: {
                     headers: {
@@ -3992,7 +3995,7 @@ export interface components {
             /** @enum {string} */
             eventType: "ACCEPTED" | "REJECTED" | "RERECOMMEND_REQUESTED" | "LATER_RATED" | "WOULD_EAT_AGAIN";
             /** @enum {string|null} */
-            reasonCode?: "TOO_EXPENSIVE" | "TOO_FAR" | "NOT_IN_MOOD" | "DIETARY_CONCERN" | "ALLERGEN_CONCERN" | "RECENTLY_EATEN" | "PLACE_CONCERN" | "OTHER" | null;
+            reasonCode?: "TOO_EXPENSIVE" | "TOO_FAR" | "NOT_IN_MOOD" | "DIETARY_CONCERN" | "ALLERGEN_CONCERN" | "RECENTLY_EATEN" | "PLACE_CONCERN" | "DO_NOT_RECOMMEND" | "OTHER" | null;
             rating?: number | null;
             booleanValue?: boolean | null;
             /**
@@ -4596,6 +4599,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             sources: components["schemas"]["ChatMessageSourceResponse"][];
+            /** @description Up to three safe follow-up prompts generated for this answer. */
+            suggestedQuestions: string[];
+            /** @description Up to three allowlisted FoodMind screens relevant to the answer. */
+            suggestedDestinations: ("INVENTORY" | "SHOPPING_LISTS" | "SAVED_RECIPES" | "COOKING_PLANS" | "RECOMMENDATIONS" | "EXPLORE")[];
         };
         ChatSessionPageResponse: {
             items: components["schemas"]["ChatSessionResponse"][];
