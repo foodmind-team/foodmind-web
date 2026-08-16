@@ -6,8 +6,8 @@ test.describe.serial('real FoodMind stack without route interception', () => {
   const runKey = Date.now().toString(36)
   const ingredientName = `E2E firm tofu ${runKey}`
   const recipeName = `E2E tofu bowl ${runKey}`
-  const mediaRecordName = 'E2E MinIO image meal'
-  const mediaGroupName = 'E2E media group'
+  const mediaRecordName = `E2E MinIO image meal ${runKey}`
+  const mediaGroupName = `E2E media group ${runKey}`
 
   test('registers and renders every primary page without a crash or blank shell', async ({ page }) => {
     const serverErrors: string[] = []
