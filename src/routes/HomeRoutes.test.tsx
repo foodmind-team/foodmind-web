@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
 import { HomePage, RecommendationContextPage, RecommendationDetailPage } from './HomeRoutes'
+import { RecordComposerPage } from './RecordRoutes'
 
 const origin = 'http://localhost:3000'
 const groups = [{ id: 'group-1', name: 'Kitchen Table', description: 'Trusted friends', createdByUserId: 'user-1', status: 'ACTIVE', createdAt: '2026-07-31T00:00:00Z', updatedAt: '2026-07-31T00:00:00Z', version: 0 }]
@@ -17,7 +18,7 @@ const recommendation = { sessionId: 'session-1', traceId: 'trace-1', status: 'FA
 
 function renderRoute(initialEntry: string, page: React.ReactNode, path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path={path} element={page} /><Route path="/recommendation-context" element={<RecommendationContextPage />} /><Route path="/recommendations/:sessionId" element={<div>Recommendation opened</div>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path={path} element={page} /><Route path="/recommendation-context" element={<RecommendationContextPage />} /><Route path="/recommendations/:sessionId" element={<div>Recommendation opened</div>} /><Route path="/records/new" element={<RecordComposerPage />} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
 }
 
 describe('recommendation decision loop', () => {
@@ -74,6 +75,30 @@ describe('recommendation decision loop', () => {
     fireEvent.click(screen.getByRole('button', { name: /try another/i }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Soba set', level: 1 })).toBeInTheDocument())
     expect(mutationCalls).toBe(0)
+  })
+
+  it('accepts the candidate and opens a prefilled meal record', async () => {
+    let feedbackBody: Record<string, unknown> = {}
+    server.use(
+      http.get(`${origin}/api/v1/groups`, () => HttpResponse.json(groups)),
+      http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(references)),
+      http.get(`${origin}/api/v1/recommendations/session-1`, () => HttpResponse.json(recommendation)),
+      http.post(`${origin}/api/v1/recommendations/session-1/feedback`, async ({ request }) => {
+        feedbackBody = await request.json() as Record<string, unknown>
+        return HttpResponse.json({ eventType: 'ACCEPTED', candidateId: 'candidate-1' }, { status: 201 })
+      }),
+    )
+    renderRoute('/recommendations/session-1', <RecommendationDetailPage />, '/recommendations/:sessionId')
+
+    await userEvent.click(await screen.findByRole('button', { name: /accept and record meal/i }))
+
+    expect(await screen.findByRole('heading', { name: 'Record what you ate', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Meal name' })).toHaveValue('Laksa bowl')
+    expect(screen.getByRole('textbox', { name: 'Place (optional)' })).toHaveValue('Green Lane Kitchen')
+    expect(screen.getByRole('spinbutton', { name: 'Price' })).toHaveValue(18)
+    expect(screen.getByRole('textbox', { name: 'Currency' })).toHaveValue('SGD')
+    expect(screen.getByRole('button', { name: /post meal to explore/i })).toBeInTheDocument()
+    expect(feedbackBody).toEqual({ eventType: 'ACCEPTED', candidateId: 'candidate-1' })
   })
 
   it('confirms a permanent rejection, preserves the session, and advances locally', async () => {

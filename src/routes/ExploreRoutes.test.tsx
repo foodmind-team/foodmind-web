@@ -25,6 +25,29 @@ function renderExplore() {
 }
 
 describe('Explore discovery preview', () => {
+  it('uses a downloaded local image when a curated place has no API image', async () => {
+    const placeId = 'ff90c8dc-7fe3-50c6-aaf0-8ea10f73c782'
+    server.use(http.get(`${origin}/api/v1/explore`, () => HttpResponse.json({
+      items: [{
+        sourceType: 'CURATED_PLACE',
+        sourceId: placeId,
+        title: 'Udon Don Bar',
+        subtitle: 'NUS University Town',
+        snippet: null,
+        imageReference: null,
+        visibility: 'CURATED',
+        occurredAt: null,
+      }],
+      nextCursor: null,
+      hasNext: false,
+    })))
+
+    const view = renderExplore()
+    await screen.findByRole('button', { name: 'Preview Udon Don Bar' })
+
+    expect(view.container.querySelector('img[src="/explore/udon.jpg"]')).toBeInTheDocument()
+  })
+
   it('opens an accessible preview without losing the full detail destination', async () => {
     server.use(http.get(`${origin}/api/v1/explore`, () => HttpResponse.json({
       items: [{

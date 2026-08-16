@@ -8,6 +8,7 @@ import { SavedSectionTabs } from '../components/saved/SavedSectionTabs'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
+import { catalogueImageFor } from '../lib/catalogue-images'
 import { formatDateTime, sentenceCase } from '../lib/format'
 
 type ExploreItem = Schema<'ExploreResultResponse'>
@@ -150,7 +151,7 @@ function SaveDiscoveryButton({ item, className = '' }: { item: ExploreItem | Sea
 function DiscoveryCard({ item, onOpen }: { item: ExploreItem | SearchItem; onOpen: () => void }) {
   const destination = destinationFor(item.sourceType, item.sourceId)
   const sourceLabel = sentenceCase(item.sourceType)
-  const image = imageSource(item.imageReference)
+  const image = imageSource(item.imageReference) ?? catalogueImageFor(item.sourceId)
   return <article className="post-card">
     <button className={`post-visual ${toneFor(item.sourceId)}`} type="button" onClick={onOpen} aria-label={`Preview ${item.title}`}>
       <SafeImage src={image} alt="" fallback={<DiscoveryImageFallback />} />
@@ -172,7 +173,7 @@ function DiscoveryPreview({ item, onClose }: { item: ExploreItem | SearchItem; o
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const destination = destinationFor(item.sourceType, item.sourceId)
   const sourceLabel = sentenceCase(item.sourceType)
-  const image = imageSource(item.imageReference)
+  const image = imageSource(item.imageReference) ?? catalogueImageFor(item.sourceId)
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog || dialog.open) return
