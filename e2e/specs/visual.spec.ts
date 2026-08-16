@@ -16,8 +16,14 @@ test('captures responsive and data-rich UI evidence', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /^food records$/i })).toBeVisible()
   await page.screenshot({ path: test.info().outputPath('food-records-1440.png'), fullPage: true })
 
-  await page.goto('/dashboard')
-  await expect(page.getByRole('heading', { name: /^dashboard$/i })).toBeVisible()
-  await expect(page.getByRole('heading', { name: /food and drink activity/i })).toBeVisible()
-  await page.screenshot({ path: test.info().outputPath('dashboard-1440.png'), fullPage: true })
+  for (const viewport of [{ width: 360, height: 800 }, { width: 768, height: 900 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/dashboard')
+    await expect(page.getByRole('heading', { name: /^insights$/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /your food story/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /food and drink activity/i })).toBeVisible()
+    await expect(page.locator('details.metric-data-disclosure')).not.toHaveAttribute('open', '')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
+    await page.screenshot({ path: test.info().outputPath(`dashboard-${viewport.width}.png`), fullPage: true })
+  }
 })

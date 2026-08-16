@@ -109,7 +109,7 @@ test('all primary destinations render their documented empty or ready state', as
     ['/inventory', /what is in your kitchen/i],
     ['/shopping-lists', /your shopping lists/i],
     ['/chat', /ask foodmind/i],
-    ['/dashboard', /^dashboard$/i],
+    ['/dashboard', /^insights$/i],
     ['/me', /^maya tan$/i],
     ['/me/preferences', /preferences/i],
   ] as const
