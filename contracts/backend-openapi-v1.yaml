@@ -491,6 +491,14 @@ components:
           type: string
           maxLength: 20
           example: LESS
+        cookingRegion:
+          type: string
+          enum:
+            - SG
+            - US
+            - CN
+          description: Account-synchronised region used for cooking guidance across clients.
+          example: SG
         likedCuisineCodes:
           type: array
           items:
@@ -523,6 +531,18 @@ components:
           example:
             - LUNCH
             - DINNER
+    UpdateCookingRegionRequest:
+      type: object
+      required:
+        - cookingRegion
+      properties:
+        cookingRegion:
+          type: string
+          enum:
+            - SG
+            - US
+            - CN
+          example: SG
     HardConstraintSummary:
       type: object
       required:
@@ -544,6 +564,7 @@ components:
           required:
             - currency
             - cleanlinessPriority
+            - cookingRegion
             - likedCuisineCodes
             - dislikedCuisineCodes
             - dietaryTagCodes
@@ -6260,6 +6281,36 @@ paths:
       responses:
         '200':
           description: Replaced preference aggregate.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferencesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/me/preferences/cooking-region:
+    put:
+      tags:
+        - User Preferences
+      summary: Update only the authenticated user's cooking guidance region.
+      description: Preserves the rest of the preference aggregate so a focused client setting cannot overwrite dietary or recommendation preferences.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCookingRegionRequest'
+      responses:
+        '200':
+          description: Updated cooking region and current preference aggregate.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/CorrelationId'

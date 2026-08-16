@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
-import { CookingDetailPage } from './CookingRoutes'
+import { CookingDetailPage, CookingSettingsPage } from './CookingRoutes'
 import { CookingSelectPage } from './CookingSelectionPage'
 
 vi.mock('../app/providers/AuthProvider', () => ({
@@ -27,6 +27,7 @@ const recipePage = {
 }
 const accountPreferences = {
   currency: 'SGD',
+  cookingRegion: 'US',
   cleanlinessPriority: 0,
   likedCuisineCodes: [],
   dislikedCuisineCodes: [],
@@ -133,7 +134,7 @@ const confirmationPlan = {
 function renderCookingRoutes(initialEntry = `/cooking?selected=${recipeOneId},${recipeTwoId}`) {
   server.use(http.get(`${origin}/api/v1/recipes`, () => HttpResponse.json(recipePage)))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/settings" element={<CookingSettingsPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
 }
 
 beforeEach(() => {
@@ -166,7 +167,7 @@ describe('cook mode selection page', () => {
 
     await user.click(screen.getByRole('button', { name: /generate plan/i }))
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
-    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId], region: 'SG', requiredDietaryTagCodes: ['VEGAN'], avoidAllergenCodes: ['PEANUT'] })
+    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId], region: 'US', requiredDietaryTagCodes: ['VEGAN'], avoidAllergenCodes: ['PEANUT'] })
     expect(receivedBody).not.toHaveProperty('ingredients')
   })
 
@@ -185,6 +186,26 @@ describe('cook mode selection page', () => {
     expect(button).toBeDisabled()
     await user.click(button)
     expect(generate).not.toHaveBeenCalled()
+  })
+})
+
+describe('account-synchronised cooking settings', () => {
+  it('loads the backend region and updates only that account field', async () => {
+    const user = userEvent.setup()
+    let receivedBody: unknown = null
+    server.use(http.put(`${origin}/api/v1/users/me/preferences/cooking-region`, async ({ request }) => {
+      receivedBody = await request.json()
+      return HttpResponse.json({ ...accountPreferences, cookingRegion: 'CN', version: 2 })
+    }))
+
+    renderCookingRoutes('/cooking/settings')
+
+    expect(await screen.findByRole('button', { name: 'United States' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Mainland China' }))
+    await user.click(screen.getByRole('button', { name: 'Save preferences' }))
+
+    expect(receivedBody).toEqual({ cookingRegion: 'CN' })
+    expect(await screen.findByText('Cooking region synced across your account.')).toBeInTheDocument()
   })
 })
 
