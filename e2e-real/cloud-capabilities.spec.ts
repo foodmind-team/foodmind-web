@@ -93,8 +93,11 @@ test.describe('AWS media and OneMap acceptance', () => {
         await outsider.getByRole('checkbox', { name: /I agree that FoodMind may collect/i }).check()
         await outsider.getByRole('button', { name: /create account/i }).click()
         await expect(outsider).toHaveURL(/\/$/)
-        const denied = await outsiderContext.request.get(`/api/v1/food-records/${recordId}`)
-        expect([403, 404]).toContain(denied.status())
+        const denied = outsider.waitForResponse((response) =>
+          response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/api/v1/food-records/${recordId}`),
+        )
+        await outsider.goto(`/records/food/${recordId}`)
+        expect([403, 404]).toContain((await denied).status())
       } finally {
         await outsiderContext.close()
       }
