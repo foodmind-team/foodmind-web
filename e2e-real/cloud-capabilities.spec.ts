@@ -38,9 +38,11 @@ test.describe('AWS media and OneMap acceptance', () => {
       const uploadInstruction = page.waitForResponse((response) =>
         response.request().method() === 'POST' && response.url().includes('/api/v1/media/uploads'),
       )
-      const storagePut = page.waitForResponse((response) =>
-        response.request().method() === 'PUT' && new URL(response.url()).hostname.endsWith('amazonaws.com'),
-      )
+      const storagePut = page.waitForResponse((response) => {
+        const hostname = new URL(response.url()).hostname
+        const isAwsHost = hostname === 'amazonaws.com' || hostname.endsWith('.amazonaws.com')
+        return response.request().method() === 'PUT' && isAwsHost
+      })
       const finalise = page.waitForResponse((response) =>
         response.request().method() === 'POST' && /\/api\/v1\/media\/[0-9a-f-]+\/finalise$/.test(new URL(response.url()).pathname),
       )
