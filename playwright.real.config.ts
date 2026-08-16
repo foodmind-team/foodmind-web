@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const cloudCapabilitiesEnabled = process.env.FOODMIND_E2E_CLOUD_CAPABILITIES === 'true'
+
 export default defineConfig({
   testDir: './e2e-real',
   outputDir: './test-results-real',
@@ -11,7 +13,11 @@ export default defineConfig({
   reporter: [['line'], ['html', { outputFolder: 'playwright-report-real', open: 'never' }]],
   use: {
     baseURL: process.env.FOODMIND_WEB_ORIGIN || 'http://127.0.0.1:4173',
-    extraHTTPHeaders: { 'X-Request-ID': process.env.FOODMIND_E2E_CORRELATION_ID || 'web-real-e2e-20260811' },
+    // Context-wide headers also reach the direct, cross-origin S3 PUT. Keep the
+    // cloud acceptance request identical to the browser request used by users.
+    extraHTTPHeaders: cloudCapabilitiesEnabled
+      ? undefined
+      : { 'X-Request-ID': process.env.FOODMIND_E2E_CORRELATION_ID || 'web-real-e2e-20260811' },
     trace: 'on',
     screenshot: 'on',
     video: 'retain-on-failure',
