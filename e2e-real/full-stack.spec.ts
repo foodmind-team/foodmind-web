@@ -63,6 +63,7 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await expect(page).toHaveURL(/\/$/)
 
     await page.goto('/inventory')
+    await page.getByRole('button', { name: 'Add ingredient', exact: true }).click()
     await page.getByLabel('Ingredient').fill(ingredientName)
     await page.getByLabel('Quantity').fill('400')
     await page.getByLabel('Unit').fill('g')
@@ -92,12 +93,14 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await expect(page.getByText(/no food records|nothing recorded/i).first()).toBeVisible()
 
     await page.goto('/inventory')
+    await page.getByRole('button', { name: 'Add ingredient', exact: true }).click()
     await page.getByLabel('Ingredient').fill('E2E archive lot')
     await page.getByLabel('Quantity').fill('1')
     await page.getByLabel('Unit').fill('item')
     await page.getByRole('button', { name: /add lot/i }).click()
     const disposableLot = page.getByRole('article').filter({ hasText: 'E2E archive lot' })
     await disposableLot.getByRole('button', { name: /archive/i }).click()
+    await disposableLot.getByRole('button', { name: 'Archive ingredient', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'E2E archive lot' })).toHaveCount(0)
   })
   test('uploads a real private image and renders it in record detail and Explore', async ({ page, browser }) => {
