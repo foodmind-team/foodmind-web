@@ -2878,6 +2878,42 @@ legend {
   flex: 0 0 auto;
 }
 
+.media-preview > .media-image-fallback {
+  display: grid;
+  width: 92px;
+  height: 76px;
+  flex: 0 0 92px;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  border-radius: 11px;
+  color: var(--muted);
+  background: var(--green-50);
+}
+
+.stored-media-card > .stored-media-image,
+.stored-media-card > .stored-media-fallback {
+  width: 132px;
+  height: 100px;
+  flex: 0 0 132px;
+  border-radius: 13px;
+  object-fit: cover;
+}
+
+.stored-media-card > .stored-media-fallback {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  color: var(--muted);
+  background: var(--green-50);
+}
+
+.media-image-fallback small,
+.stored-media-fallback small {
+  font-size: 10px;
+}
+
 .confirm-panel {
   margin-top: 22px;
   border: 1px solid #edbcb3;

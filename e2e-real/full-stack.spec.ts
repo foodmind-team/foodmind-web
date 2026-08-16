@@ -6,6 +6,8 @@ test.describe.serial('real FoodMind stack without route interception', () => {
   const runKey = Date.now().toString(36)
   const ingredientName = `E2E firm tofu ${runKey}`
   const recipeName = `E2E tofu bowl ${runKey}`
+  const mediaRecordName = 'E2E MinIO image meal'
+  const mediaGroupName = 'E2E media group'
 
   test('registers and renders every primary page without a crash or blank shell', async ({ page }) => {
     const serverErrors: string[] = []
@@ -97,6 +99,70 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     const disposableLot = page.getByRole('article').filter({ hasText: 'E2E archive lot' })
     await disposableLot.getByRole('button', { name: /archive/i }).click()
     await expect(page.getByRole('heading', { name: 'E2E archive lot' })).toHaveCount(0)
+  })
+  test('uploads a real private image and renders it in record detail and Explore', async ({ page, browser }) => {
+    await page.goto('/login')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill(password)
+    await page.getByRole('button', { name: /^sign in/i }).click()
+    await expect(page).toHaveURL(/\/$/)
+
+    await page.goto('/groups')
+    await page.getByRole('button', { name: 'Create group', exact: true }).first().click()
+    await page.getByLabel('Group name').fill(mediaGroupName)
+    await page.getByLabel('Description').fill('Private group used by the real MinIO media parity test.')
+    await page.getByRole('button', { name: 'Create group', exact: true }).last().click()
+    await expect(page).toHaveURL(/\/groups\/[0-9a-f-]+$/)
+
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nWQAAAAASUVORK5CYII=',
+      'base64',
+    )
+    await page.goto('/records/new')
+    await page.getByLabel('Meal name').fill(mediaRecordName)
+    await page.getByLabel('Visibility').selectOption('GROUP')
+    await page.getByLabel('Group').selectOption({ label: mediaGroupName })
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'e2e-record.png',
+      mimeType: 'image/png',
+      buffer: png,
+    })
+    await page.getByRole('button', { name: /add to history/i }).click()
+    await expect(page).toHaveURL(/\/records\/food\/[0-9a-f-]+$/)
+    const recordId = page.url().split('/').pop()
+    expect(recordId).toMatch(/^[0-9a-f-]+$/)
+
+    const detailImage = page.getByRole('img', { name: `Uploaded image for ${mediaRecordName}` })
+    await expect(detailImage).toBeVisible()
+    await expect.poll(() => detailImage.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+
+    await page.goto('/explore')
+    const card = page.getByRole('button', { name: `Preview ${mediaRecordName}` })
+    await expect(card).toBeVisible()
+    const cardImage = card.locator('img')
+    await expect(cardImage).toBeVisible()
+    await expect.poll(() => cardImage.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+    await card.click()
+    const previewImage = page.getByRole('dialog').locator('img')
+    await expect(previewImage).toBeVisible()
+    await expect.poll(() => previewImage.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+
+    const outsiderContext = await browser.newContext()
+    const outsider = await outsiderContext.newPage()
+    await outsider.goto('/register')
+    await outsider.getByLabel('Display name').fill('Media Outsider')
+    await outsider.getByLabel('Email').fill(`media-outsider-${runKey}@example.test`)
+    await outsider.getByLabel('Password').fill(password)
+    await outsider.getByLabel('Time zone').fill('Asia/Singapore')
+    await outsider.getByRole('button', { name: /create account/i }).click()
+    await expect(outsider).toHaveURL(/\/$/)
+    await outsider.goto('/explore')
+    await expect(outsider.getByText(mediaRecordName, { exact: true })).toHaveCount(0)
+    const denied = await outsiderContext.request.get(
+      `http://127.0.0.1:4173/api/v1/food-records/${recordId}`,
+    )
+    expect([403, 404]).toContain(denied.status())
+    await outsiderContext.close()
   })
 
   test('submits recipe import, recommendation, cooking, and chat requests to real services', async ({ page }) => {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
+import { SafeImage } from '../components/media/SafeImage'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, ApiError, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { deleteRecordMedia, mediaValidationMessage, uploadRecordMedia } from '../lib/api/media'
@@ -318,10 +319,11 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
       <label>Notes<textarea rows={4} maxLength={4_000} {...register('comment')} />{errors.comment && <small>{errors.comment.message}</small>}</label>
       <section className="media-upload-field" aria-labelledby="record-photo-title">
         <div className="media-upload-copy"><span><ImagePlus /></span><div><p className="eyebrow">Optional photo</p><h2 id="record-photo-title">Add one secure image</h2><p>JPEG, PNG, or WebP · up to 5 MB. FoodMind verifies the file before attaching it to this record.</p></div></div>
-        {photoPreview ? <div className="media-preview"><img src={photoPreview} alt="Selected record upload preview" /><div><strong>{photo?.name}</strong><small>{photo ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : ''}</small><button className="text-button danger-link" type="button" onClick={() => choosePhoto()}><X size={15} /> Remove selection</button></div></div> : <label className="media-drop-control"><ImagePlus size={21} /><span><strong>{record?.mediaAssetId ? 'Replace the stored image' : 'Choose an image'}</strong><small>The file is uploaded only when you save the record.</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label>}
-        {record?.mediaAssetId && !photo && <p className="media-existing"><ShieldCheck size={16} /> This record already has a verified stored image. Choose another image to replace it.</p>}
+        {photoPreview ? <div className="media-preview"><img src={photoPreview} alt="Selected record upload preview" referrerPolicy="no-referrer" /><div><strong>{photo?.name}</strong><small>{photo ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : ''}</small><button className="text-button danger-link" type="button" onClick={() => choosePhoto()}><X size={15} /> Remove selection</button></div></div> : <label className="media-drop-control"><ImagePlus size={21} /><span><strong>{record?.mediaAssetId ? 'Replace the stored image' : 'Choose an image'}</strong><small>The file is uploaded only when you save the record.</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label>}
+        {record?.imageUrl && !photo && <div className="media-preview"><SafeImage src={record.imageUrl} alt="Current stored record image" fallback={<span className="media-image-fallback"><Image size={22} /><small>Image unavailable</small></span>} /><div><strong>Current verified image</strong><small>The read link is temporary and refreshed with this record.</small></div></div>}
+        {record?.mediaAssetId && !photo && !record.imageUrl && <p className="media-existing"><ShieldCheck size={16} /> A verified image is attached, but it is not currently available to display.</p>}
         {photoError && <div className="inline-error" role="alert">{photoError}</div>}
-        <p className="field-note">The backend does not yet provide an authorised image-read URL, so the saved asset cannot be displayed again after this local preview.</p>
+        <p className="field-note">Saved images are private and displayed with short-lived authorised links.</p>
       </section>
       <p className="field-note">Optional fields cannot be explicitly cleared yet; the backend currently treats omitted and null values as unchanged on edits.</p>
       <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || uploadingPhoto}>{uploadingPhoto ? 'Securing image…' : isSubmitting ? 'Saving…' : recordId ? 'Save changes' : 'Add to history'} <Check size={17} /></button></div>
@@ -371,7 +373,41 @@ export function RecordDetailPage() {
   const title = 'mealNameSnapshot' in data ? data.mealNameSnapshot : data.drinkName
   const place = 'mealNameSnapshot' in data ? data.placeNameSnapshot : data.shopNameSnapshot
   const repeat = 'mealNameSnapshot' in data ? data.wouldEatAgain : data.wouldBuyAgain
-  return <div className="page section-page narrow-page"><Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link><header className="record-hero"><span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span><div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div></header><section className="detail-card"><dl className="detail-grid"><div><dt>Rating</dt><dd>{data.rating ? `${data.rating} / 5` : 'Not rated'}</dd></div><div><dt>Price</dt><dd>{formatMoney(data.price?.amount, data.price?.currency)}</dd></div><div><dt>{type === 'food' ? 'Would eat again' : 'Would buy again'}</dt><dd>{repeat === null || repeat === undefined ? 'Not answered' : repeat ? 'Yes' : 'No'}</dd></div><div><dt>Last updated</dt><dd>{formatDateTime(data.updatedAt)}</dd></div></dl>{data.comment && <div className="note-block"><p className="eyebrow">Your note</p><p>{data.comment}</p></div>}{data.mediaAssetId && !mediaDeleted && <section className="stored-media-card"><span><Image /></span><div><p className="eyebrow">Image attachment</p><h2>This record references an uploaded image</h2><p>The current API exposes the attachment reference, but not an authorised read URL or current asset status.</p></div><button className="secondary-action danger" type="button" onClick={() => setConfirmingMedia(true)}><Trash2 size={16} /> Delete image</button></section>}{mediaDeleted && <p className="media-existing"><Check size={16} /> The stored image asset has been deleted.</p>}{confirmingMedia && data.mediaAssetId && <div className="confirm-panel" role="alert" aria-labelledby="delete-media-title"><h2 id="delete-media-title">Delete the stored image?</h2><p>This removes the backend media asset. The meal or drink record will remain.</p>{removeMedia.isError && <p className="inline-error">{errorMessage(removeMedia.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirmingMedia(false)}>Keep image</button><button className="primary-action danger" type="button" disabled={removeMedia.isPending} onClick={() => removeMedia.mutate(data.mediaAssetId!)}>Delete image</button></div></div>}<div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>{confirming && <div className="confirm-panel" role="alert" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.{data.mediaAssetId && !mediaDeleted ? ' Delete its stored image separately first if you no longer want that asset retained.' : ''}</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}</section></div>
+  return (
+    <div className="page section-page narrow-page">
+      <Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link>
+      <header className="record-hero">
+        <span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span>
+        <div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div>
+      </header>
+      <section className="detail-card">
+        <dl className="detail-grid">
+          <div><dt>Rating</dt><dd>{data.rating ? `${data.rating} / 5` : 'Not rated'}</dd></div>
+          <div><dt>Price</dt><dd>{formatMoney(data.price?.amount, data.price?.currency)}</dd></div>
+          <div><dt>{type === 'food' ? 'Would eat again' : 'Would buy again'}</dt><dd>{repeat === null || repeat === undefined ? 'Not answered' : repeat ? 'Yes' : 'No'}</dd></div>
+          <div><dt>Last updated</dt><dd>{formatDateTime(data.updatedAt)}</dd></div>
+        </dl>
+        {data.comment && <div className="note-block"><p className="eyebrow">Your note</p><p>{data.comment}</p></div>}
+        {data.mediaAssetId && !mediaDeleted && (
+          <section className="stored-media-card">
+            <SafeImage
+              src={data.imageUrl}
+              alt={`Uploaded image for ${title}`}
+              loading="eager"
+              className="stored-media-image"
+              fallback={<span className="stored-media-fallback"><Image size={24} /><small>Image unavailable</small></span>}
+            />
+            <div><p className="eyebrow">Image attachment</p><h2>Verified record image</h2><p>The private image is loaded through a short-lived authorised link.</p></div>
+            <button className="secondary-action danger" type="button" onClick={() => setConfirmingMedia(true)}><Trash2 size={16} /> Delete image</button>
+          </section>
+        )}
+        {mediaDeleted && <p className="media-existing"><Check size={16} /> The stored image asset has been deleted.</p>}
+        {confirmingMedia && data.mediaAssetId && <div className="confirm-panel" role="alert" aria-labelledby="delete-media-title"><h2 id="delete-media-title">Delete the stored image?</h2><p>This removes the backend media asset. The meal or drink record will remain.</p>{removeMedia.isError && <p className="inline-error">{errorMessage(removeMedia.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirmingMedia(false)}>Keep image</button><button className="primary-action danger" type="button" disabled={removeMedia.isPending} onClick={() => removeMedia.mutate(data.mediaAssetId!)}>Delete image</button></div></div>}
+        <div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>
+        {confirming && <div className="confirm-panel" role="alert" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.{data.mediaAssetId && !mediaDeleted ? ' Delete its stored image separately first if you no longer want that asset retained.' : ''}</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}
+      </section>
+    </div>
+  )
 }
 
 export function RecordEditorPage() {

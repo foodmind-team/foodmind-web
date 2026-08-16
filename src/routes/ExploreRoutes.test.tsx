@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -50,5 +50,37 @@ describe('Explore discovery preview', () => {
 
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('renders a no-referrer signed image and falls back when it expires or fails', async () => {
+    const imageUrl = 'https://foodmind-private.s3.ap-southeast-1.amazonaws.com/media/signed.png'
+    server.use(http.get(`${origin}/api/v1/explore`, () => HttpResponse.json({
+      items: [{
+        sourceType: 'GROUP_RECORD',
+        sourceId: recordId,
+        title: 'Image-backed lunch',
+        subtitle: null,
+        snippet: 'Visible only to the authorised group.',
+        imageReference: imageUrl,
+        visibility: 'GROUP',
+        occurredAt: '2026-08-01T12:00:00Z',
+      }],
+      nextCursor: null,
+      hasNext: false,
+    })))
+
+    const view = renderExplore()
+    await screen.findByRole('button', { name: 'Preview Image-backed lunch' })
+    const image = view.container.querySelector(`img[src="${imageUrl}"]`)
+
+    expect(image).toBeInTheDocument()
+    expect(image).toHaveAttribute('referrerpolicy', 'no-referrer')
+
+    fireEvent.error(image!)
+
+    await waitFor(() => {
+      expect(view.container.querySelector(`img[src="${imageUrl}"]`)).not.toBeInTheDocument()
+      expect(view.container.querySelector('.post-shape')).toBeInTheDocument()
+    })
   })
 })

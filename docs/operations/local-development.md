@@ -14,6 +14,8 @@ Copy-Item .env.example .env.local
 ```
 
 `.env.local` is ignored. `FOODMIND_BACKEND_ORIGIN` is read only by Vite's development server; it is intentionally not prefixed with `VITE_` and cannot enter browser code. `VITE_APP_ENV` is a non-secret display label.
+Production deployments that enable record media also set `FOODMIND_MEDIA_ORIGIN` to the exact HTTPS virtual-hosted S3 bucket origin. It is used only to build a narrow CSP allowlist and must not contain a path, query, credentials, wildcard, or non-S3 hostname.
+
 
 ## Run
 
@@ -51,7 +53,7 @@ npm run build
 npm run preview
 ```
 
-`dist/` contains the static application and the Cloudflare Worker-compatible server entry. The server entry adds SPA fallback, security headers, and a closed same-origin API proxy. The Vercel function implements the same proxy boundary for the documented demo target.
+`dist/` contains the static application and the Cloudflare Worker-compatible server entry. The server entry adds SPA fallback, security headers, an exact-origin S3 media CSP entry, and a closed same-origin API proxy. Vercel routing middleware supplies the same CSP boundary for the documented demo target.
 
 ## Troubleshooting
 

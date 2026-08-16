@@ -3,6 +3,7 @@ import { ArrowRight, Bookmark, Compass, ExternalLink, Heart, Search, ShieldCheck
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
+import { SafeImage } from '../components/media/SafeImage'
 import { SavedSectionTabs } from '../components/saved/SavedSectionTabs'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
@@ -41,6 +42,15 @@ function imageSource(reference?: string | null) {
   if (!reference) return null
   return /^(https?:\/\/|\/|data:image\/|blob:)/i.test(reference) ? reference : null
 }
+function DiscoveryImageFallback({ label }: { label?: string }) {
+  return <>
+    <span className="post-shape shape-a" />
+    <span className="post-shape shape-b" />
+    <span className="post-shape shape-c" />
+    {label && <span className="discovery-visual-label">{label}</span>}
+  </>
+}
+
 
 export function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -143,7 +153,7 @@ function DiscoveryCard({ item, onOpen }: { item: ExploreItem | SearchItem; onOpe
   const image = imageSource(item.imageReference)
   return <article className="post-card">
     <button className={`post-visual ${toneFor(item.sourceId)}`} type="button" onClick={onOpen} aria-label={`Preview ${item.title}`}>
-      {image ? <img src={image} alt="" /> : <><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" /></>}
+      <SafeImage src={image} alt="" fallback={<DiscoveryImageFallback />} />
       <span className="post-tag">{sourceLabel}</span>
     </button>
     <div className="post-copy">
@@ -174,7 +184,7 @@ function DiscoveryPreview({ item, onClose }: { item: ExploreItem | SearchItem; o
     <section className="discovery-dialog">
       <button className="discovery-close" type="button" aria-label="Close preview" autoFocus onClick={onClose}><X size={21} /></button>
       <div className={`discovery-dialog-visual ${toneFor(item.sourceId)}`}>
-        {image ? <img src={image} alt="" /> : <><span className="post-shape shape-a" /><span className="post-shape shape-b" /><span className="post-shape shape-c" /><span className="discovery-visual-label">{sourceLabel}</span></>}
+        <SafeImage src={image} alt="" loading="eager" fallback={<DiscoveryImageFallback label={sourceLabel} />} />
       </div>
       <div className="discovery-dialog-copy">
         <div className="discovery-source"><span>{sourceLabel.slice(0, 1)}</span><div><strong>{sourceLabel}</strong><small>{sentenceCase(item.visibility)} source</small></div></div>

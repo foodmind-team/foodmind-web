@@ -28,6 +28,7 @@
     "@hookform/resolvers": "^5.5.7",
     "@tanstack/react-query": "^5.101.4",
     "@types/leaflet": "^1.9.22",
+    "@vercel/functions": "^3.9.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.27.0",
     "openapi-fetch": "^0.17.0",
