@@ -16,6 +16,9 @@ const registrationSchema = loginSchema.extend({
   displayName: z.string().trim().min(2, 'Use at least 2 characters.').max(100),
   password: z.string().min(8, 'Use at least 8 characters.').max(128),
   timeZone: z.string().min(1),
+  privacyConsentAccepted: z.boolean().refine((accepted) => accepted, {
+    message: 'You must agree before creating an account.',
+  }),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
@@ -84,13 +87,17 @@ export function RegisterPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<RegistrationForm>({
     resolver: zodResolver(registrationSchema),
-    defaultValues: { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Singapore' },
+    defaultValues: {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Singapore',
+      privacyConsentAccepted: false,
+    },
   })
 
   const submit = handleSubmit(async (values) => {
     setFormError(null)
     try {
-      await registerAccount({ ...values, deviceLabel: 'FoodMind Web' })
+      const { privacyConsentAccepted: _privacyConsentAccepted, ...registration } = values
+      await registerAccount({ ...registration, deviceLabel: 'FoodMind Web' })
       navigate('/', { replace: true })
     } catch (error) {
       if (error instanceof ApiError) {
@@ -112,6 +119,11 @@ export function RegisterPage() {
         <label>Email<input type="email" autoComplete="email" {...register('email')} aria-invalid={Boolean(errors.email)} />{errors.email && <small>{errors.email.message}</small>}</label>
         <label>Password<input type="password" autoComplete="new-password" {...register('password')} aria-invalid={Boolean(errors.password)} />{errors.password && <small>{errors.password.message}</small>}</label>
         <label>Time zone<input {...register('timeZone')} aria-invalid={Boolean(errors.timeZone)} />{errors.timeZone && <small>{errors.timeZone.message}</small>}</label>
+        <label className="privacy-consent-control">
+          <input type="checkbox" {...register('privacyConsentAccepted')} aria-invalid={Boolean(errors.privacyConsentAccepted)} />
+          <span>I agree that FoodMind may collect and use my account details, food preferences and history, uploaded content, and location when I allow it, to provide, protect, and improve the service.</span>
+        </label>
+        {errors.privacyConsentAccepted && <small className="privacy-consent-error" role="alert">{errors.privacyConsentAccepted.message}</small>}
         <button className="generate-button" type="submit" disabled={isSubmitting}>{isSubmitting ? <><LoaderCircle className="spin" size={19} /> Creating account…</> : <>Create account <ArrowRight size={18} /></>}</button>
       </form>
       <p className="auth-switch">Already have an account? <Link to="/login">Sign in</Link></p>

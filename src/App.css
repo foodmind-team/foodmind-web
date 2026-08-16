@@ -4246,6 +4246,29 @@ thead th {
   gap: 14px;
 }
 
+.privacy-consent-control {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.privacy-consent-control input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--green-700);
+}
+
+.privacy-consent-error {
+  margin-top: -9px;
+  color: var(--coral-dark);
+}
+
 .stack-form .generate-button {
   margin-top: 7px;
 }

@@ -22,6 +22,7 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await page.getByLabel('Email').fill(email)
     await page.getByLabel('Password').fill(password)
     await page.getByLabel('Time zone').fill('Asia/Singapore')
+    await page.getByRole('checkbox', { name: /I agree that FoodMind may collect/i }).check()
     await page.getByRole('button', { name: /create account/i }).click()
     await page.waitForTimeout(750)
     if (page.url().endsWith('/register')) {
@@ -163,6 +164,7 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await outsider.getByLabel('Email').fill(`media-outsider-${runKey}@example.test`)
     await outsider.getByLabel('Password').fill(password)
     await outsider.getByLabel('Time zone').fill('Asia/Singapore')
+    await outsider.getByRole('checkbox', { name: /I agree that FoodMind may collect/i }).check()
     await outsider.getByRole('button', { name: /create account/i }).click()
     await expect(outsider).toHaveURL(/\/$/)
     await outsider.goto('/explore')
