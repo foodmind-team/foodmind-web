@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Bookmark, Check, ChefHat, Clock3, MapPin, RotateCcw, Send, Sparkles, Users, WalletCards, WandSparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Check, ChefHat, Clock3, MapPin, RotateCcw, Send, Sparkles, Users, WalletCards, WandSparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { ErrorState, FallbackBanner, LoadingState } from '../components/feedback/States'
 import { useToast } from '../components/feedback/ToastProvider'
@@ -45,6 +45,7 @@ const contextSchema = z.object({
 })
 
 type ContextForm = z.infer<typeof contextSchema>
+type RecommendationContextNavigationState = { recommendationContext?: ContextForm }
 
 function useGroups() {
   return useQuery({
@@ -74,32 +75,39 @@ function optionalNumber(value: string) {
   return Number.isFinite(number) ? number : undefined
 }
 
+function createContextDefaults(preferences: Schema<'UserPreferencesResponse'> | undefined, groupId = ''): ContextForm {
+  return {
+    groupId,
+    mealType: preferences?.preferredMealTypes?.[0] || 'DINNER',
+    maxBudget: preferences?.budgetMax?.toString() || '',
+    currency: preferences?.currency || 'SGD',
+    area: preferences?.preferredArea || '',
+    latitude: '',
+    longitude: '',
+    maxDistanceKm: preferences?.maxDistanceKm?.toString() || '',
+    mood: '',
+    requestedFor: toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000).toISOString()),
+    maxSpiceLevel: preferences?.spiceTolerance?.toString() || '',
+    minimumCleanlinessEvidenceScore: preferences?.minimumCleanlinessEvidenceScore?.toString() || '',
+    requiredDietaryTagCodes: preferences?.dietaryTagCodes || [],
+    avoidAllergenCodes: preferences?.allergens.map((item) => item.code) || [],
+  }
+}
+
 export function HomePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const groups = useGroups()
-  const reference = useReferenceData()
   const preferences = usePreferences()
-  const [showContext, setShowContext] = useState(false)
   const command = useRef<PendingCommand | null>(null)
-  const defaults = useMemo<ContextForm>(() => ({
-    groupId: searchParams.get('groupId') || '',
-    mealType: preferences.data?.preferredMealTypes?.[0] || 'DINNER',
-    maxBudget: preferences.data?.budgetMax?.toString() || '',
-    currency: preferences.data?.currency || 'SGD',
-    area: preferences.data?.preferredArea || '',
-    latitude: '',
-    longitude: '',
-    maxDistanceKm: preferences.data?.maxDistanceKm?.toString() || '',
-    mood: '',
-    requestedFor: toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000).toISOString()),
-    maxSpiceLevel: preferences.data?.spiceTolerance?.toString() || '',
-    minimumCleanlinessEvidenceScore: preferences.data?.minimumCleanlinessEvidenceScore?.toString() || '',
-    requiredDietaryTagCodes: preferences.data?.dietaryTagCodes || [],
-    avoidAllergenCodes: preferences.data?.allergens.map((item) => item.code) || [],
-  }), [preferences.data, searchParams])
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<ContextForm>({
+  const navigationState = location.state as RecommendationContextNavigationState | null
+  const defaults = useMemo<ContextForm>(
+    () => navigationState?.recommendationContext || createContextDefaults(preferences.data, searchParams.get('groupId') || ''),
+    [navigationState?.recommendationContext, preferences.data, searchParams],
+  )
+  const { handleSubmit, watch } = useForm<ContextForm>({
     resolver: zodResolver(contextSchema),
     values: defaults,
   })
@@ -162,7 +170,7 @@ export function HomePage() {
           <div className="context-heading">
             <span className="context-icon"><Users size={19} /></span>
             <div><p>Recommending for</p><strong>{selectedGroup?.name || 'Your personal taste'}</strong></div>
-            <button type="button" onClick={() => setShowContext((shown) => !shown)} aria-expanded={showContext}>Edit</button>
+            <button type="button" onClick={() => navigate('/recommendation-context', { state: { recommendationContext: values } satisfies RecommendationContextNavigationState })}>Edit</button>
           </div>
           <div className="context-grid" aria-label="Current recommendation context">
             <ContextItem icon={Clock3} label="When" value={values.requestedFor ? new Date(values.requestedFor).toLocaleString('en-SG', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Any time'} />
@@ -185,31 +193,90 @@ export function HomePage() {
           <small>Up to three ordered candidates, shown one clear choice at a time.</small>
         </div>
 
-        {showContext && (
-          <div className="context-editor">
-            <div className="section-topline"><div><p className="eyebrow">Decision context</p><h2>Shape tonight's recommendation</h2></div><button className="icon-button" type="button" aria-label="Close context editor" onClick={() => setShowContext(false)}><X size={19} /></button></div>
-            <div className="form-grid">
-              <label>Group<select {...register('groupId')}><option value="">Just for me</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
-              <label>Meal type<select {...register('mealType')}>{(reference.data?.mealTypes || ['BREAKFAST', 'LUNCH', 'DINNER']).map((type) => <option key={type}>{type}</option>)}</select></label>
-              <label>Maximum budget<input type="number" min="0" step="0.01" {...register('maxBudget')} /></label>
-              <label>Currency<input maxLength={3} {...register('currency')} />{errors.currency && <small>{errors.currency.message}</small>}</label>
-              <label>Area<input placeholder="e.g. Tiong Bahru" {...register('area')} /></label>
-              <label>Latitude (optional)<input type="number" min="-90" max="90" step="any" placeholder="1.3521" {...register('latitude')} />{errors.latitude && <small>{errors.latitude.message}</small>}</label>
-              <label>Longitude (optional)<input type="number" min="-180" max="180" step="any" placeholder="103.8198" {...register('longitude')} />{errors.longitude && <small>{errors.longitude.message}</small>}</label>
-              <label>Maximum distance (km)<input type="number" min="0.1" step="0.1" {...register('maxDistanceKm')} /></label>
-              <label>Mood<input placeholder="Comforting, quick, adventurous…" {...register('mood')} /></label>
-              <label>Requested time<input type="datetime-local" {...register('requestedFor')} /></label>
-              <label>Maximum spice<select {...register('maxSpiceLevel')}><option value="">No limit</option>{[0, 1, 2, 3, 4, 5].map((level) => <option value={level} key={level}>{level} / 5</option>)}</select></label>
-              <label>Cleanliness evidence threshold<select {...register('minimumCleanlinessEvidenceScore')}><option value="">No threshold</option><option value="0.6">Moderate evidence</option><option value="0.8">Strong evidence</option><option value="0.9">Very strong evidence</option></select></label>
-            </div>
-            <fieldset><legend>Dietary requirements</legend><div className="check-grid">{reference.data?.dietaryTags.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('requiredDietaryTagCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
-            <fieldset><legend>Allergens to avoid</legend><div className="check-grid">{reference.data?.allergens.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('avoidAllergenCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
-            <div className="form-actions"><button className="secondary-action" type="button" onClick={() => reset(defaults)}>Use profile defaults</button><button className="primary-action" type="button" onClick={() => setShowContext(false)}>Done</button></div>
-          </div>
-        )}
       </form>
 
-      {(groups.isError || reference.isError || preferences.isError) && <div className="soft-warning" role="status">Some profile context could not be loaded. You can still adjust the available fields and retry.</div>}
+      {(groups.isError || preferences.isError) && <div className="soft-warning" role="status">Some profile context could not be loaded. You can still generate a recommendation with the available fields.</div>}
+    </div>
+  )
+}
+
+export function RecommendationContextPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const groups = useGroups()
+  const reference = useReferenceData()
+  const preferences = usePreferences()
+  const navigationState = location.state as RecommendationContextNavigationState | null
+  const profileDefaults = useMemo(
+    () => createContextDefaults(preferences.data, searchParams.get('groupId') || ''),
+    [preferences.data, searchParams],
+  )
+  const defaults = navigationState?.recommendationContext || profileDefaults
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ContextForm>({
+    resolver: zodResolver(contextSchema),
+    values: defaults,
+  })
+  const cancel = () => navigationState?.recommendationContext ? navigate(-1) : navigate('/', { replace: true })
+  const apply = handleSubmit((recommendationContext) => navigate('/', {
+    state: { recommendationContext } satisfies RecommendationContextNavigationState,
+    replace: true,
+  }))
+
+  return (
+    <div className="page section-page narrow-page recommendation-context-page">
+      <header className="section-page-heading recommendation-context-heading">
+        <div>
+          <button className="text-button context-back" type="button" onClick={cancel}><ArrowLeft size={16} /> Back to recommendation</button>
+          <p className="eyebrow">Tonight's recommendation</p>
+          <h1>Shape your decision context</h1>
+          <p>Set what matters for this decision. These changes apply to the next recommendation only.</p>
+        </div>
+      </header>
+
+      <form className="card-form recommendation-context-form" onSubmit={apply}>
+        <section>
+          <p className="eyebrow">Who and when</p>
+          <h2>Frame the occasion</h2>
+          <div className="form-grid">
+            <label>Group<select {...register('groupId')}><option value="">Just for me</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
+            <label>Meal type<select {...register('mealType')}>{(reference.data?.mealTypes || ['BREAKFAST', 'LUNCH', 'DINNER']).map((type) => <option key={type}>{type}</option>)}</select></label>
+            <label>Requested time<input type="datetime-local" {...register('requestedFor')} /></label>
+            <label>Mood<input placeholder="Comforting, quick, adventurous…" {...register('mood')} /></label>
+          </div>
+        </section>
+
+        <section>
+          <p className="eyebrow">Place and budget</p>
+          <h2>Define the practical range</h2>
+          <div className="form-grid">
+            <label>Maximum budget<input type="number" min="0" step="0.01" {...register('maxBudget')} /></label>
+            <label>Currency<input maxLength={3} aria-invalid={Boolean(errors.currency)} {...register('currency')} />{errors.currency && <small>{errors.currency.message}</small>}</label>
+            <label>Area<input placeholder="e.g. Tiong Bahru" {...register('area')} /></label>
+            <label>Maximum distance (km)<input type="number" min="0.1" step="0.1" {...register('maxDistanceKm')} /></label>
+            <label>Latitude (optional)<input type="number" min="-90" max="90" step="any" placeholder="1.3521" aria-invalid={Boolean(errors.latitude)} {...register('latitude')} />{errors.latitude && <small>{errors.latitude.message}</small>}</label>
+            <label>Longitude (optional)<input type="number" min="-180" max="180" step="any" placeholder="103.8198" aria-invalid={Boolean(errors.longitude)} {...register('longitude')} />{errors.longitude && <small>{errors.longitude.message}</small>}</label>
+          </div>
+        </section>
+
+        <section>
+          <p className="eyebrow">Hard needs</p>
+          <h2>Protect the non-negotiables</h2>
+          <div className="form-grid">
+            <label>Maximum spice<select {...register('maxSpiceLevel')}><option value="">No limit</option>{[0, 1, 2, 3, 4, 5].map((level) => <option value={level} key={level}>{level} / 5</option>)}</select></label>
+            <label>Cleanliness evidence threshold<select {...register('minimumCleanlinessEvidenceScore')}><option value="">No threshold</option><option value="0.6">Moderate evidence</option><option value="0.8">Strong evidence</option><option value="0.9">Very strong evidence</option></select></label>
+          </div>
+          <fieldset><legend>Dietary requirements</legend><div className="check-grid">{reference.data?.dietaryTags.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('requiredDietaryTagCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
+          <fieldset><legend>Allergens to avoid</legend><div className="check-grid">{reference.data?.allergens.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('avoidAllergenCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
+        </section>
+
+        {(groups.isError || reference.isError || preferences.isError) && <div className="soft-warning" role="status">Some profile context could not be loaded. You can still adjust the available fields.</div>}
+        <div className="form-actions sticky-form-actions">
+          <button className="secondary-action" type="button" onClick={() => reset(profileDefaults)}>Use profile defaults</button>
+          <button className="secondary-action" type="button" onClick={cancel}>Cancel</button>
+          <button className="primary-action" type="submit"><Check size={17} /> Apply context</button>
+        </div>
+      </form>
     </div>
   )
 }

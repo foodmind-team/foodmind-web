@@ -126,7 +126,7 @@ another returned candidate without silently starting a new recommendation sessio
 - Groups is the shared decision workspace for membership, authorised history, and sharing a result. Polls and voting are not part of the current contract.
 - Explore uses an image-led post grid, but its data remains limited to authorised group-visible records and curated platform content.
 - Public/follower feeds, public internet restaurant search, ordering, and payment remain outside the MVP.
-- The Cooking mode reads manually supplied or backend-provided pantry context; it must not imply automatic inventory capture.
+- The Cooking mode selects owner-scoped recipes and plans against current persisted inventory; manual ingredients remain a secondary option.
 
 ## Chatbot UI
 

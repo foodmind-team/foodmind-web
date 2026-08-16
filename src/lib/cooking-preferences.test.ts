@@ -4,13 +4,13 @@ import { loadCookingPreferences, saveCookingPreferences } from './cooking-prefer
 describe('cooking preferences', () => {
   beforeEach(() => localStorage.clear())
 
-  it('persists normalized plan constraints', () => {
-    saveCookingPreferences({ region: 'cn', requiredDietaryTagCodes: ['vegan', 'VEGAN'], avoidAllergenCodes: ['peanut'] })
+  it('persists only the normalized cooking region', () => {
+    localStorage.setItem('foodmind:cooking-preferences:v1', JSON.stringify({ region: 'us', requiredDietaryTagCodes: ['VEGAN'], avoidAllergenCodes: ['PEANUT'] }))
+    expect(loadCookingPreferences()).toEqual({ region: 'US' })
 
-    expect(loadCookingPreferences()).toEqual({
-      region: 'CN',
-      requiredDietaryTagCodes: ['VEGAN'],
-      avoidAllergenCodes: ['PEANUT'],
-    })
+    saveCookingPreferences({ region: 'cn' })
+
+    expect(loadCookingPreferences()).toEqual({ region: 'CN' })
+    expect(JSON.parse(localStorage.getItem('foodmind:cooking-preferences:v1') || '{}')).toEqual({ region: 'CN' })
   })
 })

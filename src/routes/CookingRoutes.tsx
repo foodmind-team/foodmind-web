@@ -359,41 +359,26 @@ export function CookingHistoryPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Settings page — region / dietary / allergen preferences + scenario help
-// (cooking-app SettingsPage, adapted to real reference data).
+// Cooking-specific preferences. Account dietary and allergen rules remain the
+// single source of truth for every recommendation and cooking plan.
 // ---------------------------------------------------------------------------
 
 export function CookingSettingsPage() {
-  const reference = useQuery({ queryKey: queryKeys.catalogue.reference(), staleTime: Infinity, queryFn: async () => dataOrThrow<Schema<'CatalogueReferenceDataResponse'>>(await api.GET('/catalogue/reference-data')) })
   const { showToast } = useToast()
   const initialPreferences = useMemo(loadCookingPreferences, [])
   const [region, setRegion] = useState(initialPreferences.region)
-  const [dietary, setDietary] = useState<Set<string>>(new Set(initialPreferences.requiredDietaryTagCodes))
-  const [allergens, setAllergens] = useState<Set<string>>(new Set(initialPreferences.avoidAllergenCodes))
   const REGIONS = [{ code: 'SG', name: 'Singapore' }, { code: 'US', name: 'United States' }, { code: 'CN', name: 'Mainland China' }]
-  const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) => setter((current) => {
-    const next = new Set(current)
-    if (!next.delete(value)) next.add(value)
-    return next
-  })
   const save = () => {
-    saveCookingPreferences({ region, requiredDietaryTagCodes: [...dietary], avoidAllergenCodes: [...allergens] })
-    showToast('Cooking preferences saved and will be used for new plans.')
+    saveCookingPreferences({ region })
+    showToast('Cooking region saved for new plans.')
   }
   return (
     <div className="page section-page">
       <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
-      <header className="section-page-heading"><div><p className="eyebrow">Cook preferences</p><h1>Plan preferences.</h1><p>Saved preferences are sent to the backend with every new Cooking Plan.</p></div><span className="cooking-mark"><Settings /></span></header>
-      <section className="detail-card"><p className="eyebrow">Region</p><h2>Where are you cooking?</h2><div className="settings-chips">{REGIONS.map((item) => <button className={region === item.code ? 'active' : ''} aria-pressed={region === item.code} type="button" onClick={() => setRegion(item.code)} key={item.code}>{item.name}</button>)}</div></section>
-      <section className="detail-card"><p className="eyebrow">Dietary requirements</p><h2>Tags the plan must honour.</h2>{reference.isLoading ? <LoadingState label="Loading reference data…" /> : <div className="settings-chips">{(reference.data?.dietaryTags || []).map((item) => <button className={dietary.has(item.code) ? 'active' : ''} aria-pressed={dietary.has(item.code)} type="button" onClick={() => toggle(setDietary, item.code)} key={item.code}>{item.name}</button>)}</div>}</section>
-      <section className="detail-card"><p className="eyebrow">Allergens to avoid</p><h2>Ingredients the plan must avoid.</h2><div className="settings-chips">{(reference.data?.allergens || []).map((item) => <button className={allergens.has(item.code) ? 'active' : ''} aria-pressed={allergens.has(item.code)} type="button" onClick={() => toggle(setAllergens, item.code)} key={item.code}>{item.name}</button>)}</div></section>
+      <header className="section-page-heading"><div><p className="eyebrow">Kitchen setup</p><h1>Cooking preferences</h1><p>Your region helps FoodMind apply the right cooking guidance.</p></div><span className="cooking-mark"><Settings /></span></header>
+      <section className="detail-card"><p className="eyebrow">Region</p><h2>Choose the guidance region.</h2><div className="settings-chips">{REGIONS.map((item) => <button className={region === item.code ? 'active' : ''} aria-pressed={region === item.code} type="button" onClick={() => setRegion(item.code)} key={item.code}>{item.name}</button>)}</div></section>
+      <section className="local-draft-note"><Check size={17} /><span><strong>One source for dietary safety.</strong> Update dietary requirements and allergens in <Link to="/me/preferences">account preferences</Link>.</span></section>
       <div className="generate-actions"><button className="primary-action" type="button" onClick={save}><Check size={16} /> Save preferences</button></div>
-      <section className="warning-list"><p className="eyebrow">How to trigger each outcome</p><h2>Demo scenarios</h2>
-        <div><strong>Ready</strong><p>Select two quick dishes and generate a plan with no time pressure.</p></div>
-        <div><strong>Needs confirmation</strong><p>Select a dish whose pantry line runs short; the backend asks how to proceed.</p></div>
-        <div><strong>Infeasible</strong><p>Select the slow soup and set a time limit below its cooking span.</p></div>
-        <div><strong>Failed</strong><p>Ask the backend with constraints it cannot honour; it returns a retryable failure.</p></div>
-      </section>
     </div>
   )
 }

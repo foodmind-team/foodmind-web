@@ -23,10 +23,13 @@ test('generates one lead recommendation and Try another stays local', async ({ p
   await expect(page.getByRole('button', { name: /generate recommendation/i })).toBeVisible()
 
   await page.getByRole('button', { name: /^edit$/i }).click()
+  await expect(page).toHaveURL('/recommendation-context')
+  await expect(page.getByRole('heading', { name: /shape your decision context/i })).toBeVisible()
   await page.getByLabel('Maximum budget').fill('24')
   await page.getByLabel('Latitude (optional)').fill('1.3521')
   await page.getByLabel('Longitude (optional)').fill('103.8198')
-  await page.getByRole('button', { name: /^done$/i }).click()
+  await page.getByRole('button', { name: /apply context/i }).click()
+  await expect(page).toHaveURL('/')
   await page.getByRole('button', { name: /generate recommendation/i }).click()
 
   await expect(page).toHaveURL(`/recommendations/${recommendation.sessionId}`)
@@ -66,6 +69,28 @@ test('core home is responsive and has no serious automated accessibility finding
   expect(serious).toEqual([])
 })
 
+test('recommendation context page is responsive and accessible', async ({ page }) => {
+  await mockApi(page)
+  for (const viewport of [{ width: 360, height: 800 }, { width: 768, height: 900 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await expect(page).toHaveURL('/recommendation-context')
+    await expect(page.getByRole('heading', { name: /shape your decision context/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /apply context/i })).toBeVisible()
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
+    expect(overflow).toBe(false)
+  }
+
+  await page.addScriptTag({ path: resolve('node_modules/axe-core/axe.min.js') })
+  const serious = await page.evaluate(async () => {
+    const axe = (window as unknown as { axe: { run: (root: Document, options: object) => Promise<{ violations: { id: string; impact: string | null }[] }> } }).axe
+    const result = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag22aa'] } })
+    return result.violations.filter((violation) => violation.impact === 'serious' || violation.impact === 'critical')
+  })
+  expect(serious).toEqual([])
+})
+
 test('all primary destinations render their documented empty or ready state', async ({ page }) => {
   test.setTimeout(60_000)
   await mockApi(page)
@@ -80,7 +105,7 @@ test('all primary destinations render their documented empty or ready state', as
     ['/saved/recipes', /recipes you can actually cook/i],
     ['/cooking', /what do you want to cook tonight/i],
     ['/cooking/history', /plans you have generated/i],
-    ['/cooking/settings', /plan preferences/i],
+    ['/cooking/settings', /cooking preferences/i],
     ['/inventory', /what is in your kitchen/i],
     ['/shopping-lists', /your shopping lists/i],
     ['/chat', /ask foodmind/i],

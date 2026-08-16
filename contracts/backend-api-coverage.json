@@ -7,5 +7,11 @@
       "reason": "Refresh bypasses the authenticated OpenAPI client to prevent recursive 401 handling."
     }
   ],
-  "exceptions": []
+  "exceptions": [
+    {
+      "method": "POST",
+      "path": "/cooking-plans/generate",
+      "reason": "Cooking plan generation uses the asynchronous endpoint exclusively so the UI has one non-blocking primary action."
+    }
+  ]
 }
