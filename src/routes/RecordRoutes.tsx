@@ -164,8 +164,8 @@ function recordDefaults(type: RecordType, record?: AnyRecord | null, searchParam
     placeId: food?.placeId || drink?.placeId || searchParams?.get('placeId') || '',
     cuisineId: food?.cuisineId || '',
     occurredAt: toLocalDateTimeValue(record?.occurredAt),
-    price: record?.price?.amount?.toString() || '',
-    currency: record?.price?.currency || 'SGD',
+    price: record?.price?.amount?.toString() || searchParams?.get('price') || '',
+    currency: record?.price?.currency || searchParams?.get('currency') || 'SGD',
     rating: record?.rating?.toString() || '',
     comment: record?.comment || '',
     repeatIntent: food?.wouldEatAgain === true || drink?.wouldBuyAgain === true ? 'true' : food?.wouldEatAgain === false || drink?.wouldBuyAgain === false ? 'false' : '',
@@ -217,6 +217,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
   const visibility = watch('visibility')
   const sessionId = searchParams.get('sessionId')
   const candidateId = searchParams.get('candidateId')
+  const fromRecommendation = !recordId && currentType === 'food' && Boolean(sessionId && candidateId)
 
   useEffect(() => reset({ ...defaults, type: currentType }), [currentType, defaults, reset])
   useEffect(() => {
@@ -275,8 +276,10 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
       void queryClient.invalidateQueries({ queryKey: ['groups'] })
       void queryClient.invalidateQueries({ queryKey: ['explore'] })
       void queryClient.invalidateQueries({ queryKey: ['search'] })
-      showToast(recordId ? 'Record updated.' : 'Record added to your history.')
-      navigate(`/records/${currentType}/${saved.id}`)
+      showToast(recordId ? 'Record updated.' : fromRecommendation ? 'Meal recorded. Opening it in Explore.' : 'Record added to your history.')
+      navigate(fromRecommendation
+        ? `/explore?type=records&view=${encodeURIComponent(`GROUP_RECORD:${saved.id}`)}`
+        : `/records/${currentType}/${saved.id}`)
     } catch (error) {
       if (newMediaAssetId && !attachedToRecord) await deleteRecordMedia(newMediaAssetId).catch(() => undefined)
       if (error instanceof ApiError && error.status === 409) setConflict(true)
@@ -300,6 +303,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
 
   return (
     <form className="record-form card-form" onSubmit={(event) => void submit(event)} noValidate>
+      {fromRecommendation && <div className="soft-warning" role="status"><strong>Recommendation accepted.</strong> Review what FoodMind filled in, add what you actually ate, then save to open this meal in Explore.</div>}
       {!recordId && <div className="segmented-control" aria-label="Record type"><label className={currentType === 'food' ? 'active' : ''}><input type="radio" value="food" {...register('type')} /> <Utensils size={17} /> Food</label><label className={currentType === 'drink' ? 'active' : ''}><input type="radio" value="drink" {...register('type')} /> <Coffee size={17} /> Drink</label></div>}
       {conflict && <div className="conflict-panel" role="alert"><strong>A newer version is available.</strong><p>Your draft is still here. Reload the latest record before deciding what to reapply.</p><button className="secondary-action" type="button" onClick={() => window.location.reload()}>Reload latest</button></div>}
       {errors.root && <div className="form-alert" role="alert">{errors.root.message}</div>}
@@ -313,9 +317,10 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
         <label>Rating<select {...register('rating')} aria-invalid={Boolean(errors.rating)}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option value={rating} key={rating}>{rating} / 5</option>)}</select>{errors.rating && <small>{errors.rating.message}</small>}</label>
         <label>{currentType === 'food' ? 'Would eat again?' : 'Would buy again?'}<select {...register('repeatIntent')} aria-invalid={Boolean(errors.repeatIntent)}><option value="">Not sure</option><option value="true">Yes</option><option value="false">No</option></select>{errors.repeatIntent && <small>{errors.repeatIntent.message}</small>}</label>
         {currentType === 'drink' && <><label>Sweetness level<select {...register('sweetnessLevel')} aria-invalid={Boolean(errors.sweetnessLevel)}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select>{errors.sweetnessLevel && <small>{errors.sweetnessLevel.message}</small>}</label><label>Ice level<select {...register('iceLevel')} aria-invalid={Boolean(errors.iceLevel)}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select>{errors.iceLevel && <small>{errors.iceLevel.message}</small>}</label></>}
-        <label>Visibility<select {...register('visibility')}><option value="PRIVATE">Private</option><option value="GROUP">A trusted group</option></select></label>
+        <label>Who can see this in Explore?<select {...register('visibility')}><option value="PRIVATE">Only me</option><option value="GROUP">A trusted group</option></select></label>
         {visibility === 'GROUP' && <label>Group<select {...register('groupId')} aria-invalid={Boolean(errors.groupId)}><option value="">Choose a group</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>{errors.groupId && <small>{errors.groupId.message}</small>}</label>}
       </div>
+      <p className="field-note">Your record appears in your own Explore. Choose a trusted group to share it with active group members too.</p>
       <label>Notes<textarea rows={4} maxLength={4_000} {...register('comment')} />{errors.comment && <small>{errors.comment.message}</small>}</label>
       <section className="media-upload-field" aria-labelledby="record-photo-title">
         <div className="media-upload-copy"><span><ImagePlus /></span><div><p className="eyebrow">Optional photo</p><h2 id="record-photo-title">Add one secure image</h2><p>JPEG, PNG, or WebP · up to 5 MB. FoodMind verifies the file before attaching it to this record.</p></div></div>
@@ -326,7 +331,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
         <p className="field-note">Saved images are private and displayed with short-lived authorised links.</p>
       </section>
       <p className="field-note">Optional fields cannot be explicitly cleared yet; the backend currently treats omitted and null values as unchanged on edits.</p>
-      <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || uploadingPhoto}>{uploadingPhoto ? 'Securing image…' : isSubmitting ? 'Saving…' : recordId ? 'Save changes' : 'Add to history'} <Check size={17} /></button></div>
+      <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : fromRecommendation ? `/recommendations/${sessionId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || uploadingPhoto}>{uploadingPhoto ? 'Securing image…' : isSubmitting ? 'Saving…' : recordId ? 'Save changes' : fromRecommendation ? 'Post meal to Explore' : 'Add to history'} <Check size={17} /></button></div>
     </form>
   )
 }
@@ -334,7 +339,8 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
 export function RecordComposerPage() {
   const [searchParams] = useSearchParams()
   const type = searchParams.get('type') === 'drink' ? 'drink' : 'food'
-  return <div className="page section-page narrow-page"><header className="section-page-heading"><div><p className="eyebrow">A signal you control</p><h1>Record a meal or drink</h1><p>Keep the details that will be useful later, with an optional backend-verified photo.</p></div></header><RecordForm type={type} /></div>
+  const fromRecommendation = type === 'food' && Boolean(searchParams.get('sessionId') && searchParams.get('candidateId'))
+  return <div className="page section-page narrow-page"><header className="section-page-heading"><div><p className="eyebrow">{fromRecommendation ? 'Accepted recommendation' : 'A signal you control'}</p><h1>{fromRecommendation ? 'Record what you ate' : 'Record a meal or drink'}</h1><p>{fromRecommendation ? 'Confirm the suggested details, add your experience, and choose who can see it in Explore.' : 'Keep the details that will be useful later, with an optional backend-verified photo.'}</p></div></header><RecordForm type={type} /></div>
 }
 
 function useRecord(type: string, id: string) {

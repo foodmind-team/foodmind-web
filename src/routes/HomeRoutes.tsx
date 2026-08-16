@@ -289,6 +289,19 @@ const reasonLabels: Record<string, string> = {
   CUISINE_MATCH: 'Cuisine match', WITHIN_BUDGET: 'Within budget', SPICE_MATCH: 'Spice match', NEARBY: 'Nearby', NOT_RECENTLY_REPEATED: 'Fresh choice', SIMILAR_USERS_LIKED: 'Similar users liked', SIMILAR_TO_LIKED_MEALS: 'Similar to meals you liked', TRUSTED_GROUP_RATING: 'Trusted group signal', WANT_TO_TRY: 'On your shortlist',
 }
 
+function recordQuery(candidate: RecommendationCandidate, sessionId: string) {
+  return new URLSearchParams({
+    type: 'food',
+    mealName: candidate.mealName,
+    sessionId,
+    candidateId: candidate.candidateId,
+    ...(candidate.mealId ? { mealId: candidate.mealId } : {}),
+    ...(candidate.placeId ? { placeId: candidate.placeId } : {}),
+    ...(candidate.placeName ? { placeName: candidate.placeName } : {}),
+    ...(candidate.price ? { price: String(candidate.price.amount), currency: candidate.price.currency } : {}),
+  }).toString()
+}
+
 export function RecommendationDetailPage() {
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
@@ -326,6 +339,10 @@ export function RecommendationDetailPage() {
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations.history() })
       void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      if (variables.eventType === 'ACCEPTED' && variables.candidateId) {
+        const acceptedCandidate = items.find((item) => item.candidateId === variables.candidateId)
+        if (acceptedCandidate) navigate(`/records/new?${recordQuery(acceptedCandidate, sessionId)}`)
+      }
     },
   })
   const save = useMutation({
@@ -350,12 +367,7 @@ export function RecommendationDetailPage() {
 
   const fallbackUsed = usesRecommendationFallback(recommendation.data?.status, recommendation.data?.fallbackStatus)
   const isRecordCandidate = candidate.candidateSourceType === 'FOOD_RECORD'
-  const recordAgainQuery = new URLSearchParams({
-    type: 'food', mealName: candidate.mealName, sessionId, candidateId: candidate.candidateId,
-    ...(candidate.mealId ? { mealId: candidate.mealId } : {}),
-    ...(candidate.placeId ? { placeId: candidate.placeId } : {}),
-    ...(candidate.placeName ? { placeName: candidate.placeName } : {}),
-  }).toString()
+  const recordAgainQuery = recordQuery(candidate, sessionId)
   return (
     <div className="page recommendation-page">
       <header className="section-page-heading"><div><p className="eyebrow">Candidate {candidateIndex + 1} of {items.length} · {sentenceCase(candidate.recommendationType)}</p><h1>{candidate.mealName}</h1><p>At {candidate.placeName}{candidate.area ? ` in ${candidate.area}` : ''}</p></div><span className="rank-orbit">#{candidate.rank}</span></header>
@@ -371,7 +383,7 @@ export function RecommendationDetailPage() {
           <p className="result-description">{candidate.explanation}</p>
           <div className="signal-list">{candidate.reasonCodes.map((reason) => <span key={reason}><Check size={14} /> {reasonLabels[reason] || sentenceCase(reason)}</span>)}</div>
           {(feedback.isError || save.isError || share.isError || rerecommend.isError) && <div className="inline-error" role="alert">{errorMessage(feedback.error || save.error || share.error || rerecommend.error)}</div>}
-          <div className="decision-actions"><button className="primary-action" type="button" disabled={feedback.isPending} onClick={() => feedback.mutate({ eventType: 'ACCEPTED', candidateId: candidate.candidateId })}><Check size={17} /> Accept this choice</button><button className="secondary-action" type="button" disabled={candidateIndex >= items.length - 1} onClick={() => setCandidateIndex((index) => clampCandidateIndex(index + 1, items.length))}><RotateCcw size={16} /> Try another</button></div>
+          <div className="decision-actions"><button className="primary-action" type="button" disabled={feedback.isPending} onClick={() => feedback.mutate({ eventType: 'ACCEPTED', candidateId: candidate.candidateId })}><Check size={17} /> {feedback.isPending ? 'Accepting…' : 'Accept and record meal'}</button><button className="secondary-action" type="button" disabled={feedback.isPending || candidateIndex >= items.length - 1} onClick={() => setCandidateIndex((index) => clampCandidateIndex(index + 1, items.length))}><RotateCcw size={16} /> Try another</button></div>
           <div className="reject-panel"><label>Not right tonight?<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}><option value="">Choose a reason</option>{['TOO_EXPENSIVE', 'TOO_FAR', 'NOT_IN_MOOD', 'DIETARY_CONCERN', 'ALLERGEN_CONCERN', 'RECENTLY_EATEN', 'PLACE_CONCERN', 'OTHER'].map((reason) => <option value={reason} key={reason}>{sentenceCase(reason)}</option>)}</select></label><button className="text-button danger-link" type="button" disabled={!rejectionReason || feedback.isPending} onClick={() => feedback.mutate({ eventType: 'REJECTED', candidateId: candidate.candidateId, reasonCode: rejectionReason as Schema<'RecommendationFeedbackRequest'>['reasonCode'] })}>Reject this candidate</button><button className="text-button danger-link" type="button" disabled={feedback.isPending} onClick={() => { if (window.confirm('Hide this meal at this place from all future recommendations? This cannot be undone.')) feedback.mutate({ eventType: 'REJECTED', candidateId: candidate.candidateId, reasonCode: 'DO_NOT_RECOMMEND' }) }}>Never recommend this</button></div>
         </div>
       </section>
@@ -382,7 +394,7 @@ export function RecommendationDetailPage() {
       </div>
       <div className="contextual-links">
         {isRecordCandidate && candidate.foodRecordId && <Link to={`/records/food/${candidate.foodRecordId}`}><ChefHat size={17} /> Open original record</Link>}
-        <Link to={`/records/new?${recordAgainQuery}`}><ChefHat size={17} /> Record this meal later</Link>
+        <Link to={`/records/new?${recordAgainQuery}`}><ChefHat size={17} /> Record this meal</Link>
         {candidate.placeId && <Link to={`/catalogue/place/${candidate.placeId}`}>View place details <ArrowRight size={15} /></Link>}
       </div>
     </div>
