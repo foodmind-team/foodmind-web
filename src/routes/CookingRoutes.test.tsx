@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
 import { CookingDetailPage } from './CookingRoutes'
@@ -24,6 +24,17 @@ const recipePage = {
     { id: recipeTwoId, name: 'Corn & Rib Soup', servings: 4, imageUrl: null, tags: ['Soup'], allergenHints: [], ingredients: ['500 g pork ribs', '2 corn cobs'], steps: ['Simmer until tender.'], createdAt: '2026-08-02T09:00:00Z', updatedAt: '2026-08-02T09:00:00Z', version: 0 },
   ],
   page: 0, size: 100, totalItems: 2, totalPages: 1, hasNext: false,
+}
+const accountPreferences = {
+  currency: 'SGD',
+  cleanlinessPriority: 0,
+  likedCuisineCodes: [],
+  dislikedCuisineCodes: [],
+  dietaryTagCodes: ['VEGAN'],
+  allergens: [{ code: 'PEANUT', severity: 'SEVERE' }],
+  preferredMealTypes: ['DINNER'],
+  hardConstraints: { requiredDietaryTagCodes: ['VEGAN'], allergens: ['PEANUT'] },
+  version: 1,
 }
 const readyPlan = {
   planId,
@@ -125,6 +136,12 @@ function renderCookingRoutes(initialEntry = `/cooking?selected=${recipeOneId},${
   return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
 }
 
+beforeEach(() => {
+  server.use(
+    http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(accountPreferences)),
+  )
+})
+
 describe('cook mode selection page', () => {
   it('lists backend recipes and sends exact recipe IDs to generate-async', async () => {
     const user = userEvent.setup()
@@ -144,11 +161,30 @@ describe('cook mode selection page', () => {
     expect(await screen.findByText('Scrambled Eggs with Tomato')).toBeInTheDocument()
     expect(screen.getByText('Corn & Rib Soup')).toBeInTheDocument()
     expect(screen.getByText(/dishes selected/i)).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Cooking pages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /generate now/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /generate plan/i }))
     expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
-    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId], region: 'SG', requiredDietaryTagCodes: [], avoidAllergenCodes: [] })
+    expect(receivedBody).toMatchObject({ servings: 4, recipeIds: [recipeOneId, recipeTwoId], region: 'SG', requiredDietaryTagCodes: ['VEGAN'], avoidAllergenCodes: ['PEANUT'] })
     expect(receivedBody).not.toHaveProperty('ingredients')
+  })
+
+  it('blocks generation until account dietary safety preferences can be loaded', async () => {
+    const user = userEvent.setup()
+    const generate = vi.fn()
+    server.use(
+      http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json({ message: 'Unavailable' }, { status: 503 })),
+      http.post(`${origin}/api/v1/cooking-plans/generate-async`, generate),
+    )
+
+    renderCookingRoutes()
+
+    expect(await screen.findByText(/Your dietary preferences could not be loaded/)).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: /generate plan/i })
+    expect(button).toBeDisabled()
+    await user.click(button)
+    expect(generate).not.toHaveBeenCalled()
   })
 })
 
@@ -211,6 +247,7 @@ describe('cooking plan async generation', () => {
     )
 
     renderCookingRoutes()
+    expect(await screen.findByText('Scrambled Eggs with Tomato')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /generate plan/i }))
 
     expect(await screen.findByText('A plan could not be completed')).toBeInTheDocument()

@@ -9,15 +9,15 @@ export function EmptyState({ title, message, action }: { title: string; message:
   return <div className="state-panel"><Inbox /><h2>{title}</h2><p>{message}</p>{action}</div>
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({ error, onRetry, title, message }: { error: unknown; onRetry?: () => void; title?: string; message?: string }) {
   const forbidden = error instanceof ApiError && error.status === 403
   const offline = !navigator.onLine
   const Icon = offline ? CloudOff : forbidden ? LockKeyhole : AlertTriangle
   return (
     <div className="state-panel error-state" role="alert">
       <Icon />
-      <h2>{offline ? 'You are offline' : forbidden ? 'This stays private' : 'FoodMind hit a snag'}</h2>
-      <p>{errorMessage(error)}</p>
+      <h2>{title || (offline ? 'You are offline' : forbidden ? 'This stays private' : 'FoodMind hit a snag')}</h2>
+      <p>{message || errorMessage(error)}</p>
       {error instanceof ApiError && error.traceId && <small>Support reference: {error.traceId}</small>}
       {onRetry && <button className="secondary-action" type="button" onClick={onRetry}>Try again</button>}
     </div>

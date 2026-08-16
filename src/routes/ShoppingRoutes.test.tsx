@@ -37,7 +37,7 @@ function renderPage() {
 }
 
 describe('persisted shopping list', () => {
-  it('shows only item names, checks the item, completes the list, and continues', async () => {
+  it('shows item quantities, checks the item, completes the list, and continues', async () => {
     const user = userEvent.setup()
     let updateBody: Record<string, unknown> | null = null
     let updateIfMatch: string | null = null
@@ -57,8 +57,8 @@ describe('persisted shopping list', () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Shopping list.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Firm tofu' })).toBeInTheDocument()
+    expect(screen.getByText('100 g needed · 100 g planned')).toBeInTheDocument()
     expect(screen.queryByText(/servings/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/quantity/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/expiry/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('checkbox'))
 

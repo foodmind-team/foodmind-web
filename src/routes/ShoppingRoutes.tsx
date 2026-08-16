@@ -80,7 +80,7 @@ function ShoppingItemEditor({ item, list }: {
   return (
     <article className={`shopping-item${item.checked ? ' checked' : ''}`}>
       <label className="shopping-check"><input type="checkbox" aria-label={`Mark ${item.ingredientName} ${item.checked ? 'not purchased' : 'purchased'}`} checked={item.checked} disabled={list.status !== 'OPEN' || update.isPending} onChange={(event) => update.mutate(event.target.checked)} /><span><Check size={16} /></span></label>
-      <div className="shopping-item-copy"><h2>{item.ingredientName}</h2></div>
+      <div className="shopping-item-copy"><h2>{item.ingredientName}</h2><p>{item.requiredQuantity} {item.unit} needed{item.purchasedQuantity != null ? ` · ${item.purchasedQuantity} ${item.unit} planned` : ''}</p></div>
       {update.isError && <div className="form-alert" role="alert">{errorMessage(update.error)}</div>}
     </article>
   )

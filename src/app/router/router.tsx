@@ -25,6 +25,7 @@ export const router = createBrowserRouter([
       element: <AppShell />,
       children: [
         { index: true, lazy: async () => ({ Component: (await import('../../routes/HomeRoutes')).HomePage }) },
+        { path: 'recommendation-context', lazy: async () => ({ Component: (await import('../../routes/HomeRoutes')).RecommendationContextPage }) },
         { path: 'recommendations/:sessionId', lazy: async () => ({ Component: (await import('../../routes/HomeRoutes')).RecommendationDetailPage }) },
         { path: 'history', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).HistoryPage }) },
         { path: 'records/new', lazy: async () => ({ Component: (await import('../../routes/RecordRoutes')).RecordComposerPage }) },

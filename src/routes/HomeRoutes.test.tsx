@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
-import { HomePage, RecommendationDetailPage } from './HomeRoutes'
+import { HomePage, RecommendationContextPage, RecommendationDetailPage } from './HomeRoutes'
 
 const origin = 'http://localhost:3000'
 const groups = [{ id: 'group-1', name: 'Kitchen Table', description: 'Trusted friends', createdByUserId: 'user-1', status: 'ACTIVE', createdAt: '2026-07-31T00:00:00Z', updatedAt: '2026-07-31T00:00:00Z', version: 0 }]
@@ -17,10 +17,28 @@ const recommendation = { sessionId: 'session-1', traceId: 'trace-1', status: 'FA
 
 function renderRoute(initialEntry: string, page: React.ReactNode, path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path={path} element={page} /><Route path="/recommendations/:sessionId" element={<div>Recommendation opened</div>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path={path} element={page} /><Route path="/recommendation-context" element={<RecommendationContextPage />} /><Route path="/recommendations/:sessionId" element={<div>Recommendation opened</div>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
 }
 
 describe('recommendation decision loop', () => {
+  it('edits recommendation context on a dedicated page and applies it to Home', async () => {
+    server.use(
+      http.get(`${origin}/api/v1/groups`, () => HttpResponse.json(groups)),
+      http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(references)),
+      http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(preferences)),
+    )
+    renderRoute('/', <HomePage />, '/')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    expect(await screen.findByRole('heading', { name: 'Shape your decision context', level: 1 })).toBeInTheDocument()
+
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Maximum budget' }), '42')
+    await userEvent.click(screen.getByRole('button', { name: /apply context/i }))
+
+    expect(await screen.findByRole('heading', { name: 'Dinner, decided with confidence.', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText('SGD 42')).toBeInTheDocument()
+  })
+
   it('generates a typed recommendation with an idempotency key', async () => {
     let idempotencyKey = ''
     let generatedBody: { maxBudget?: number; currency?: string } = {}

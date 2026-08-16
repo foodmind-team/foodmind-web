@@ -2534,6 +2534,22 @@ legend {
   margin: 4px 0 18px;
 }
 
+.recommendation-context-heading {
+  align-items: flex-start;
+}
+
+.recommendation-context-heading > div {
+  max-width: 720px;
+}
+
+.context-back {
+  margin-bottom: 24px;
+}
+
+.recommendation-context-form > section:first-child {
+  padding-top: 2px;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -6285,6 +6301,105 @@ button.recipe-card.selected {
 
 .selection-error {
   margin-top: 12px;
+}
+
+.kitchen-menu,
+.recipe-card-menu {
+  position: relative;
+}
+
+.kitchen-menu summary,
+.recipe-card-menu summary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  padding: 0 13px;
+  font-size: 11px;
+  font-weight: 760;
+  cursor: pointer;
+  list-style: none;
+}
+
+.kitchen-menu summary::-webkit-details-marker,
+.recipe-card-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.kitchen-menu > div,
+.recipe-card-menu > div {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 190px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .38);
+}
+
+.kitchen-menu a,
+.recipe-card-menu a {
+  min-height: 44px;
+  color: var(--ink);
+  padding: 13px 15px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.kitchen-menu a:hover,
+.recipe-card-menu a:hover {
+  background: rgba(217, 239, 116, .09);
+}
+
+.recipe-card-menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+}
+
+.recipe-card-menu summary {
+  width: 44px;
+  padding: 0;
+  border-color: rgba(17, 23, 15, .2);
+  color: #11170f;
+  background: rgba(255, 255, 255, .82);
+}
+
+.confirm-panel {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  border: 1px solid #68453d;
+  border-radius: 12px;
+  background: rgba(74, 37, 31, .24);
+  padding: 12px;
+}
+
+.confirm-panel p {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.confirm-panel > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.shopping-item-copy p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .cooking-progress-card {

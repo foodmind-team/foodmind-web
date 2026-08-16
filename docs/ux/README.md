@@ -2,13 +2,15 @@
 
 The home experience is organized around two clear modes: **Eat out & delivery**
 and **Cooking**. Recommendation mode is the default and receives the strongest
-visual priority; Cooking reuses the same interaction pattern to turn pantry
-context into a practical meal plan.
+visual priority; Cooking opens a focused account-recipe selection flow and
+checks current inventory before building a practical meal plan.
 
 ## UX priorities
 
 - Keep the mode switch visible at the top without competing with the main action.
 - Make “Generate recommendation” the unmistakable first action on the home page.
+- Keep recommendation context on a separate full page and apply edits to one decision only.
+- Keep Cooking free of duplicate page navigation; mobile utilities live in one Kitchen menu.
 - Explain how group preferences, personal history, budget, distance, and dietary
   needs influenced a result.
 - Preserve the Proposal contract by receiving an ordered set of up to three
@@ -21,6 +23,7 @@ context into a practical meal plan.
   bottom navigation on desktop and mobile.
 - Preserve responsive behavior, keyboard focus, accessible labels, and reduced
   motion support.
+- Keep one visually dominant CTA on each core screen.
 
 Automatic pantry capture, public internet restaurant search, ordering, and
 payment remain outside the MVP.
