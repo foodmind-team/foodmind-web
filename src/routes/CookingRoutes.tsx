@@ -26,7 +26,6 @@ import {
   type ExecutionSnapshot,
   type LocalTaskState,
 } from '../lib/cooking-execution'
-import { loadCookingPreferences, saveCookingPreferences } from '../lib/cooking-preferences'
 import { formatDateTime, sentenceCase } from '../lib/format'
 
 const PLAN_STAGES = [
@@ -364,21 +363,34 @@ export function CookingHistoryPage() {
 // ---------------------------------------------------------------------------
 
 export function CookingSettingsPage() {
+  const queryClient = useQueryClient()
   const { showToast } = useToast()
-  const initialPreferences = useMemo(loadCookingPreferences, [])
-  const [region, setRegion] = useState(initialPreferences.region)
+  const preferences = useQuery({
+    queryKey: queryKeys.users.preferences(),
+    queryFn: async () => dataOrThrow<Schema<'UserPreferencesResponse'>>(await api.GET('/users/me/preferences')),
+  })
+  const [region, setRegion] = useState('SG')
+  useEffect(() => {
+    if (preferences.data?.cookingRegion) setRegion(preferences.data.cookingRegion)
+  }, [preferences.data?.cookingRegion])
   const REGIONS = [{ code: 'SG', name: 'Singapore' }, { code: 'US', name: 'United States' }, { code: 'CN', name: 'Mainland China' }]
-  const save = () => {
-    saveCookingPreferences({ region })
-    showToast('Cooking region saved for new plans.')
-  }
+  const update = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'UserPreferencesResponse'>>(await api.PUT('/users/me/preferences/cooking-region', { body: { cookingRegion: region as 'SG' | 'US' | 'CN' } })),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.users.preferences(), updated)
+      showToast('Cooking region synced across your account.')
+    },
+  })
+  if (preferences.isLoading) return <div className="page"><LoadingState label="Loading cooking preferences…" /></div>
+  if (preferences.isError) return <div className="page"><ErrorState error={preferences.error} onRetry={() => void preferences.refetch()} /></div>
   return (
     <div className="page section-page">
       <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
-      <header className="section-page-heading"><div><p className="eyebrow">Kitchen setup</p><h1>Cooking preferences</h1><p>Your region helps FoodMind apply the right cooking guidance.</p></div><span className="cooking-mark"><Settings /></span></header>
+      <header className="section-page-heading"><div><p className="eyebrow">Kitchen setup</p><h1>Cooking preferences</h1><p>Your region is saved to your FoodMind account and shared with Android.</p></div><span className="cooking-mark"><Settings /></span></header>
       <section className="detail-card"><p className="eyebrow">Region</p><h2>Choose the guidance region.</h2><div className="settings-chips">{REGIONS.map((item) => <button className={region === item.code ? 'active' : ''} aria-pressed={region === item.code} type="button" onClick={() => setRegion(item.code)} key={item.code}>{item.name}</button>)}</div></section>
       <section className="local-draft-note"><Check size={17} /><span><strong>One source for dietary safety.</strong> Update dietary requirements and allergens in <Link to="/me/preferences">account preferences</Link>.</span></section>
-      <div className="generate-actions"><button className="primary-action" type="button" onClick={save}><Check size={16} /> Save preferences</button></div>
+      {update.isError && <div className="form-alert" role="alert">{errorMessage(update.error)}</div>}
+      <div className="generate-actions"><button className="primary-action" type="button" disabled={update.isPending} onClick={() => update.mutate()}><Check size={16} /> {update.isPending ? 'Saving…' : 'Save preferences'}</button></div>
     </div>
   )
 }
