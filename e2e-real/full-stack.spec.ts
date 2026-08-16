@@ -117,7 +117,10 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await page.getByRole('button', { name: 'Create group', exact: true }).first().click()
     await page.getByLabel('Group name').fill(mediaGroupName)
     await page.getByLabel('Description').fill('Private group used by the real MinIO media parity test.')
-    await page.getByRole('button', { name: 'Create group', exact: true }).last().click()
+    const createGroupPanel = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Create a group' }),
+    })
+    await createGroupPanel.getByRole('button', { name: 'Create group', exact: true }).click()
     await expect(page).toHaveURL(/\/groups\/[0-9a-f-]+$/)
 
     const png = Buffer.from(
