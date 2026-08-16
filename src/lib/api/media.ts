@@ -26,6 +26,13 @@ async function cleanupPendingMedia(mediaAssetId: string) {
     // The backend also expires stale PENDING assets. Never mask the useful upload error.
   }
 }
+function browserSafeStorageHeaders(requiredHeaders: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(requiredHeaders)
+      .filter(([name]) => name.toLowerCase() !== 'content-length'),
+  )
+}
+
 
 export async function uploadRecordMedia(file: File, signal?: AbortSignal) {
   const invalid = mediaValidationMessage(file)
@@ -49,7 +56,7 @@ export async function uploadRecordMedia(file: File, signal?: AbortSignal) {
     const uploaded = await fetch(instruction.uploadUrl, {
       method: 'PUT',
       body: bytes,
-      headers: instruction.requiredHeaders,
+      headers: browserSafeStorageHeaders(instruction.requiredHeaders),
       credentials: 'omit',
       redirect: 'error',
       signal,

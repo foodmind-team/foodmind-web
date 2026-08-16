@@ -98,7 +98,7 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: Exact allow-listed headers that must be sent to object storage.
+          description: Exact allow-listed headers that must be sent to object storage. Browser-controlled Content-Length is intentionally omitted.
         expiresAt:
           type: string
           format: date-time
@@ -1113,6 +1113,11 @@ components:
           format: uuid
           nullable: true
           description: Present on detail responses; list cards return null.
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Short-lived authorized image URL; null when media is disabled or unavailable.
         createdAt:
           type: string
           format: date-time
@@ -1281,6 +1286,11 @@ components:
           format: uuid
           nullable: true
           description: Present on detail responses; list cards return null.
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Short-lived authorized image URL; null when media is disabled or unavailable.
         createdAt:
           type: string
           format: date-time
@@ -3060,6 +3070,8 @@ components:
         imageReference:
           type: string
           nullable: true
+          format: uri
+          description: Short-lived authorized image URL for READY record media.
         relevance:
           type: number
           nullable: true
@@ -3127,6 +3139,8 @@ components:
         imageReference:
           type: string
           nullable: true
+          format: uri
+          description: Short-lived authorized image URL for READY record media.
         visibility:
           type: string
           enum:

@@ -1,8 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,7 +9,9 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const backendRoot = resolve(webRoot, '..', 'foodmind-backend')
 const contractPath = resolve(webRoot, 'contracts', 'backend-openapi-v1.yaml')
 const lockPath = resolve(webRoot, 'contracts', 'backend-openapi-v1.lock.json')
-const temporaryDirectory = await mkdtemp(resolve(tmpdir(), 'foodmind-api-'))
+const temporaryRoot = resolve(webRoot, 'node_modules', '.cache')
+await mkdir(temporaryRoot, { recursive: true })
+const temporaryDirectory = await mkdtemp(resolve(temporaryRoot, 'foodmind-api-'))
 const temporarySchema = resolve(temporaryDirectory, 'schema.ts')
 const canonicalize = (value) => value.replaceAll('\r\n', '\n')
 

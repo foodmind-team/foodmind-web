@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,7 +7,9 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outputPath = process.argv[2]
   ? resolve(process.argv[2])
   : resolve(webRoot, 'src', 'lib', 'api', 'generated', 'schema.ts')
-const temporaryDirectory = await mkdtemp(resolve(tmpdir(), 'foodmind-contract-'))
+const temporaryRoot = resolve(webRoot, 'node_modules', '.cache')
+await mkdir(temporaryRoot, { recursive: true })
+const temporaryDirectory = await mkdtemp(resolve(temporaryRoot, 'foodmind-contract-'))
 const normalizedContractPath = resolve(temporaryDirectory, 'openapi.yaml')
 
 try {

@@ -33,6 +33,8 @@ npm run dev
 ```
 
 The browser always calls same-origin `/api/v1`. Vite reads the server-only `FOODMIND_BACKEND_ORIGIN` value and proxies those calls; no backend origin is compiled into browser JavaScript.
+Production media delivery additionally requires `FOODMIND_MEDIA_ORIGIN` to be the exact HTTPS virtual-hosted S3 origin (for example, `https://bucket.s3.ap-southeast-1.amazonaws.com`). Vercel middleware and the Cloudflare Worker validate that single origin before adding it to `connect-src` and `img-src`; invalid or absent values fail closed.
+
 
 ## Quality commands
 

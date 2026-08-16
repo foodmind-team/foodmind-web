@@ -37,12 +37,12 @@ describe('bounded record media upload', () => {
           mediaAssetId: assetId,
           status: 'PENDING',
           uploadUrl: 'https://storage.example.test/upload-once',
-          requiredHeaders: { 'Content-Type': 'image/png', 'x-amz-checksum-sha256': 'signed-checksum' },
+          requiredHeaders: { 'Content-Type': 'image/png', 'Content-Length': '999', 'x-amz-checksum-sha256': 'signed-checksum' },
           expiresAt: '2026-08-01T12:05:00Z',
         }, { status: 201 })
       }),
       http.put('https://storage.example.test/upload-once', ({ request }) => {
-        storageRequests({ authorization: request.headers.get('authorization'), credentials: request.credentials, type: request.headers.get('content-type') })
+        storageRequests({ authorization: request.headers.get('authorization'), contentLength: request.headers.get('content-length'), credentials: request.credentials, type: request.headers.get('content-type') })
         return new HttpResponse(null, { status: 200 })
       }),
       http.post(`${origin}/api/v1/media/${assetId}/finalise`, () => HttpResponse.json({ mediaAssetId: assetId, status: 'READY', contentType: 'image/png', byteSize: 5, createdAt: '2026-08-01T12:00:00Z', finalisedAt: '2026-08-01T12:00:01Z' })),
@@ -50,7 +50,8 @@ describe('bounded record media upload', () => {
 
     await expect(uploadRecordMedia(imageFile())).resolves.toMatchObject({ mediaAssetId: assetId, status: 'READY' })
     expect(declarations).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/png', byteSize: 5, checksumSha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824' }))
-    expect(storageRequests).toHaveBeenCalledWith({ authorization: null, credentials: 'omit', type: 'image/png' })
+    expect(storageRequests).toHaveBeenCalledWith(expect.objectContaining({ authorization: null, credentials: 'omit', type: 'image/png' }))
+    expect(storageRequests.mock.calls[0]?.[0].contentLength).not.toBe('999')
   })
 
   it('deletes a pending asset when storage transfer fails', async () => {

@@ -3071,7 +3071,7 @@ export interface components {
              * @description Sensitive short-lived presigned URL. Never log or persist it.
              */
             uploadUrl: string;
-            /** @description Exact allow-listed headers that must be sent to object storage. */
+            /** @description Exact allow-listed headers that must be sent to object storage. Browser-controlled Content-Length is intentionally omitted. */
             requiredHeaders: {
                 [key: string]: string;
             };
@@ -3672,6 +3672,11 @@ export interface components {
              * @description Present on detail responses; list cards return null.
              */
             mediaAssetId?: string | null;
+            /**
+             * Format: uri
+             * @description Short-lived authorized image URL; null when media is disabled or unavailable.
+             */
+            imageUrl?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3760,6 +3765,11 @@ export interface components {
              * @description Present on detail responses; list cards return null.
              */
             mediaAssetId?: string | null;
+            /**
+             * Format: uri
+             * @description Short-lived authorized image URL; null when media is disabled or unavailable.
+             */
+            imageUrl?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -4549,6 +4559,10 @@ export interface components {
             title: string;
             subtitle?: string | null;
             snippet?: string | null;
+            /**
+             * Format: uri
+             * @description Short-lived authorized image URL for READY record media.
+             */
             imageReference?: string | null;
             relevance?: number | null;
             /** @enum {string} */
@@ -4574,6 +4588,10 @@ export interface components {
             title: string;
             subtitle?: string | null;
             snippet?: string | null;
+            /**
+             * Format: uri
+             * @description Short-lived authorized image URL for READY record media.
+             */
             imageReference?: string | null;
             /** @enum {string} */
             visibility: "GROUP" | "CURATED";
