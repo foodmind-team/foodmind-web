@@ -25,8 +25,9 @@ function renderExplore() {
 }
 
 describe('Explore discovery preview', () => {
-  it('uses a downloaded local image when a curated place has no API image', async () => {
+  it('uses the Backend-owned image reference for a curated place', async () => {
     const placeId = 'ff90c8dc-7fe3-50c6-aaf0-8ea10f73c782'
+    const imageReference = `/api/v1/catalogue-images/${placeId}`
     server.use(http.get(`${origin}/api/v1/explore`, () => HttpResponse.json({
       items: [{
         sourceType: 'CURATED_PLACE',
@@ -34,7 +35,7 @@ describe('Explore discovery preview', () => {
         title: 'Udon Don Bar',
         subtitle: 'NUS University Town',
         snippet: null,
-        imageReference: null,
+        imageReference,
         visibility: 'CURATED',
         occurredAt: null,
       }],
@@ -45,7 +46,7 @@ describe('Explore discovery preview', () => {
     const view = renderExplore()
     await screen.findByRole('button', { name: 'Preview Udon Don Bar' })
 
-    expect(view.container.querySelector('img[src="/explore/udon.jpg"]')).toBeInTheDocument()
+    expect(view.container.querySelector(`img[src="${imageReference}"]`)).toBeInTheDocument()
   })
 
   it('opens an accessible preview without losing the full detail destination', async () => {
