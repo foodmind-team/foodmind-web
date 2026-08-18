@@ -1,73 +1,86 @@
 # FoodMind Web
 
-FoodMind Web is the responsive React client for the FoodMind decision loop: record and share experience, generate a grounded recommendation, decide, and feed the outcome back into future choices. The application implements the current Spring Boot `/api/v1` contract and keeps authorization and business rules on the backend.
+FoodMind Web is the responsive browser client for recording food experiences, receiving grounded recommendations, deciding what to eat, and feeding outcomes back into the product. It consumes the public FoodMind Backend contract and keeps business rules and authorisation on the server.
 
-## Included capabilities
+## Features
 
-- Memory-only access-token authentication with cookie-backed, single-flight refresh
-- Profile and complete preference management
-- Food and drink record history, creation, detail, editing, deletion, and ETag conflict recovery
-- Bounded record-image creation, direct storage transfer, finalisation, replacement, and deletion
-- Trusted groups, invitations, members, authorised feeds, recommendation sharing, and Want to Try
-- Recommendation context, ordered candidates, feedback, fallback disclosure, and true re-recommendation
-- Authorised Explore and Search with permission-safe unavailable states
-- Manual-ingredient cooking plans and cooking history
-- Grounded chat sessions, references, messages, comparison, summary, and navigation responses
-- Backend-owned dashboard metrics and weekly recaps with accessible text/table alternatives
-- Responsive navigation, URL-backed filters, offline/error/empty states, keyboard focus, and reduced motion
+- Authentication, profile and preference management
+- Food and drink records, history, optional record images, and optimistic-concurrency recovery
+- Trusted groups, authorised Explore and Search, recommendation sharing, and Want to Try
+- Recommendation, cooking-plan, grounded-chat, dashboard, and weekly-recap journeys
+- Responsive, keyboard-accessible UI with explicit loading, empty, offline, and error states
 
-Not included: public follower feeds, polls, ordering, payment, maps, persisted photo display (the backend has no authorised read URL), inferred pantry inventory, or browser access to private service origins.
+## Prerequisites
 
-## Stack
+- Node.js `24.16.x` (see `package.json` and `.node-version`)
+- npm
+- A running FoodMind Backend at `http://localhost:8080` for live development
 
-React 19, TypeScript, Vite, React Router, TanStack Query, React Hook Form with Zod, Tailwind CSS tokens, Recharts, typed OpenAPI, Vitest, Testing Library, MSW, axe, and Playwright.
+## Quick start
 
-## Start locally
-
-Use Node 24 (also pinned in `.node-version`), start the backend on port 8080, then:
-
-```powershell
-Copy-Item .env.example .env.local
+```bash
+git clone https://github.com/foodmind-team/foodmind-web.git
+cd foodmind-web
+cp .env.example .env.local
 npm ci
 npm run dev
 ```
 
-The browser always calls same-origin `/api/v1`. Vite reads the server-only `FOODMIND_BACKEND_ORIGIN` value and proxies those calls; no backend origin is compiled into browser JavaScript.
-Production media delivery additionally requires `FOODMIND_MEDIA_ORIGIN` to be the exact HTTPS virtual-hosted S3 origin (for example, `https://bucket.s3.ap-southeast-1.amazonaws.com`). Vercel middleware and the Cloudflare Worker validate that single origin before adding it to `connect-src` and `img-src`; invalid or absent values fail closed.
+Open the URL printed by Vite, normally `http://localhost:5173`.
 
+`FOODMIND_BACKEND_ORIGIN` is read by Vite's development proxy. Browser code calls same-origin `/api/v1`, so do not put a private Agent or inference-service URL into the frontend configuration. For local HTTP authentication, set the Backend's `WEB_COOKIE_SECURE=false` and allow the Vite origin in `WEB_ALLOWED_ORIGINS`.
 
-## Quality commands
+## Configuration
 
-```powershell
-npm run api:check
-npm run api:coverage
-npm run lint
-npm run typecheck
-npm test -- --run
-npm run test:coverage
-npm run build
-npm run test:e2e
-npm run validate
-```
+| Variable | Required for | Notes |
+| --- | --- | --- |
+| `VITE_APP_ENV` | Local environment label | Use `local` for development |
+| `FOODMIND_BACKEND_ORIGIN` | Vite proxy | Usually `http://localhost:8080` |
+| `FOODMIND_MEDIA_ORIGIN` | Browser-accessible private media | Must be one exact HTTPS virtual-hosted S3 origin; omit it when media is disabled |
 
-`api:check` confirms that the generated types match the committed OpenAPI snapshot and lock metadata. `api:coverage` proves that every backend operation has either a production consumer or an approved, documented contract blocker. `validate` runs both API gates, lint, type, test coverage, and the production build. Playwright is a separate deterministic browser gate.
+Copy `.env.example`; do not commit `.env.local`. Production middleware rejects invalid media origins rather than widening the browser content-security policy.
 
 ## API contract
 
-The immutable snapshot is in `contracts/backend-openapi-v1.yaml`; its backend commit and SHA-256 are recorded alongside it. Refresh tokens and CSRF companions returned by the compatibility response are deliberately not persisted. Access tokens exist only in module memory, while the browser forwards the backend's HttpOnly refresh cookie through the same-origin proxy.
+[`contracts/backend-openapi-v1.yaml`](contracts/backend-openapi-v1.yaml) is the committed Backend contract snapshot. After an intentional Backend contract update, refresh it before changing client behaviour:
 
-To intentionally update the snapshot, first commit the backend contract and then run:
-
-```powershell
+```bash
 npm run api:snapshot -- <backend-commit>
 npm run api:generate
 ```
 
-## Documentation
+The API check and coverage check guard the snapshot, generated types, and declared consumer coverage.
 
-- [Implementation plan](docs/planning/web-frontend-development-plan.md)
-- [Backend integration](docs/planning/backend-api-integration-plan.md)
-- [Testing and delivery](docs/planning/git-testing-and-delivery-plan.md)
-- [Frontend architecture](docs/architecture/frontend-architecture.md)
-- [Local development](docs/operations/local-development.md)
-- [Security review](docs/operations/security-review.md)
+## Commands
+
+```bash
+npm run dev                 # development server
+npm run validate            # contract, lint, type, unit, coverage, and build gates
+npm run security:check      # CSP and frontend security checks
+npm run test:e2e            # deterministic Playwright browser suite
+npm run test:e2e:real       # real-stack browser suite; requires local services
+npm run build && npm run preview
+```
+
+## Repository layout
+
+```text
+src/          Routes, components, services, stores, hooks, and tests
+contracts/    Versioned Backend OpenAPI snapshot and metadata
+e2e/          Deterministic Playwright tests
+e2e-real/     Real-stack Playwright journeys
+scripts/      Contract, security, bundle, and build checks
+docs/         Architecture, operations, security, UX, and planning notes
+```
+
+## Contributing
+
+Use the typed Backend contract instead of duplicating business rules in the browser. Keep accessible labels and keyboard flows intact, add tests for user-visible changes, and run `npm run validate`, `npm run security:check`, and the relevant E2E suite before a pull request.
+
+## Security
+
+Access tokens stay in memory and refresh credentials remain HttpOnly cookies. Never add service tokens, cloud credentials, or private runtime URLs to browser code.
+
+## License
+
+No open-source license is currently included in this repository. Obtain permission from the maintainers before redistributing or reusing the code.

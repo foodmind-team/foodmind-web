@@ -3091,8 +3091,8 @@ components:
         imageReference:
           type: string
           nullable: true
-          format: uri
-          description: Short-lived authorized image URL for READY record media.
+          format: uri-reference
+          description: Public relative curated-catalogue image path or short-lived authorized URL for READY record media.
         relevance:
           type: number
           nullable: true
@@ -3160,8 +3160,8 @@ components:
         imageReference:
           type: string
           nullable: true
-          format: uri
-          description: Short-lived authorized image URL for READY record media.
+          format: uri-reference
+          description: Public relative curated-catalogue image path or short-lived authorized URL for READY record media.
         visibility:
           type: string
           enum:
@@ -5952,6 +5952,36 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /catalogue-images/{sourceId}:
+    get:
+      tags:
+        - Catalogue
+      summary: Read a public curated catalogue image.
+      description: Returns only bundled non-sensitive artwork for a mapped curated catalogue item. The response is never cached so both clients observe an updated registry immediately.
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 21000000-0000-4000-8000-000000000001
+      responses:
+        '200':
+          description: Curated JPEG artwork.
+          headers:
+            Cache-Control:
+              description: Always no-store for this small server-owned registry.
+              schema:
+                type: string
+                example: no-store
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
         '404':
           $ref: '#/components/responses/NotFound'
   /catalogue/reference-data:

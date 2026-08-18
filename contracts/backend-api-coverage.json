@@ -9,6 +9,11 @@
   ],
   "exceptions": [
     {
+      "method": "GET",
+      "path": "/catalogue-images/{sourceId}",
+      "reason": "Curated image paths are assigned to image elements, so the browser fetches the public JPEG directly without routing binary data through the JSON API client."
+    },
+    {
       "method": "POST",
       "path": "/cooking-plans/generate",
       "reason": "Cooking plan generation uses the asynchronous endpoint exclusively so the UI has one non-blocking primary action."

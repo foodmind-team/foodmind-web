@@ -2274,6 +2274,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalogue-images/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a public curated catalogue image.
+         * @description Returns only bundled non-sensitive artwork for a mapped curated catalogue item. The response is never cached so both clients observe an updated registry immediately.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @example 21000000-0000-4000-8000-000000000001 */
+                    sourceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Curated JPEG artwork. */
+                200: {
+                    headers: {
+                        /** @description Always no-store for this small server-owned registry. */
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/jpeg": string;
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalogue/reference-data": {
         parameters: {
             query?: never;
@@ -4625,8 +4670,8 @@ export interface components {
             subtitle?: string | null;
             snippet?: string | null;
             /**
-             * Format: uri
-             * @description Short-lived authorized image URL for READY record media.
+             * Format: uri-reference
+             * @description Public relative curated-catalogue image path or short-lived authorized URL for READY record media.
              */
             imageReference?: string | null;
             relevance?: number | null;
@@ -4654,8 +4699,8 @@ export interface components {
             subtitle?: string | null;
             snippet?: string | null;
             /**
-             * Format: uri
-             * @description Short-lived authorized image URL for READY record media.
+             * Format: uri-reference
+             * @description Public relative curated-catalogue image path or short-lived authorized URL for READY record media.
              */
             imageReference?: string | null;
             /** @enum {string} */
