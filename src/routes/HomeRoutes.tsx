@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, Bookmark, Check, ChefHat, Clock3, MapPin, RotateCcw, Send, Sparkles, Users, WalletCards, WandSparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Check, ChefHat, Clock3, LocateFixed, MapPin, RotateCcw, Send, Sparkles, Trash2, Users, WalletCards, WandSparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -10,6 +10,7 @@ import { useToast } from '../components/feedback/ToastProvider'
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
 import { clampCandidateIndex, prepareCommand, usesRecommendationFallback, type PendingCommand } from '../lib/commands'
+import { requestCurrentLocation } from '../lib/current-location'
 import { formatMoney, sentenceCase, toLocalDateTimeValue } from '../lib/format'
 
 type RecommendationCandidate = Schema<'RecommendationCandidateResponse'> & { modelScore?: number | null }
@@ -22,16 +23,11 @@ const contextSchema = z.object({
   mealType: z.string().max(40),
   maxBudget: z.string(),
   currency: z.string().length(3, 'Use a three-letter currency code.'),
-  area: z.string().max(120),
   latitude: z.string(),
   longitude: z.string(),
   maxDistanceKm: z.string(),
   mood: z.string().max(120),
   requestedFor: z.string(),
-  maxSpiceLevel: z.string(),
-  minimumCleanlinessEvidenceScore: z.string(),
-  requiredDietaryTagCodes: z.array(z.string()),
-  avoidAllergenCodes: z.array(z.string()),
 }).superRefine((value, context) => {
   const hasLatitude = Boolean(value.latitude.trim())
   const hasLongitude = Boolean(value.longitude.trim())
@@ -42,6 +38,7 @@ const contextSchema = z.object({
   const longitude = optionalNumber(value.longitude)
   if (latitude !== undefined && (latitude < -90 || latitude > 90)) context.addIssue({ code: 'custom', path: ['latitude'], message: 'Latitude must be between -90 and 90.' })
   if (longitude !== undefined && (longitude < -180 || longitude > 180)) context.addIssue({ code: 'custom', path: ['longitude'], message: 'Longitude must be between -180 and 180.' })
+  if (value.maxDistanceKm.trim() && (!hasLatitude || !hasLongitude)) context.addIssue({ code: 'custom', path: ['maxDistanceKm'], message: 'Use your current location before setting a maximum distance.' })
 })
 
 type ContextForm = z.infer<typeof contextSchema>
@@ -76,21 +73,17 @@ function optionalNumber(value: string) {
 }
 
 function createContextDefaults(preferences: Schema<'UserPreferencesResponse'> | undefined, groupId = ''): ContextForm {
+  const hasLocation = preferences?.preferredLatitude != null && preferences?.preferredLongitude != null
   return {
     groupId,
     mealType: preferences?.preferredMealTypes?.[0] || 'DINNER',
     maxBudget: preferences?.budgetMax?.toString() || '',
     currency: preferences?.currency || 'SGD',
-    area: preferences?.preferredArea || '',
-    latitude: '',
-    longitude: '',
-    maxDistanceKm: preferences?.maxDistanceKm?.toString() || '',
+    latitude: hasLocation ? preferences.preferredLatitude!.toString() : '',
+    longitude: hasLocation ? preferences.preferredLongitude!.toString() : '',
+    maxDistanceKm: hasLocation ? preferences?.maxDistanceKm?.toString() || '' : '',
     mood: '',
     requestedFor: toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000).toISOString()),
-    maxSpiceLevel: preferences?.spiceTolerance?.toString() || '',
-    minimumCleanlinessEvidenceScore: preferences?.minimumCleanlinessEvidenceScore?.toString() || '',
-    requiredDietaryTagCodes: preferences?.dietaryTagCodes || [],
-    avoidAllergenCodes: preferences?.allergens.map((item) => item.code) || [],
   }
 }
 
@@ -137,24 +130,17 @@ export function HomePage() {
       mealType: form.mealType || undefined,
       maxBudget: optionalNumber(form.maxBudget),
       currency: form.maxBudget ? form.currency.toUpperCase() : undefined,
-      area: form.area || undefined,
       latitude: optionalNumber(form.latitude),
       longitude: optionalNumber(form.longitude),
       maxDistanceKm: optionalNumber(form.maxDistanceKm),
       mood: form.mood || undefined,
       requestedFor: form.requestedFor ? new Date(form.requestedFor).toISOString() : undefined,
-      constraints: {
-        maxSpiceLevel: optionalNumber(form.maxSpiceLevel),
-        minimumCleanlinessEvidenceScore: optionalNumber(form.minimumCleanlinessEvidenceScore),
-        requiredDietaryTagCodes: form.requiredDietaryTagCodes,
-        avoidAllergenCodes: form.avoidAllergenCodes,
-      },
     }
     command.current = prepareCommand(command.current, body)
     generate.mutate({ body, key: command.current.key })
   })
 
-  const hardConstraints = [...values.requiredDietaryTagCodes, ...values.avoidAllergenCodes]
+  const profileRuleCount = (preferences.data?.dietaryTagCodes?.length || 0) + (preferences.data?.allergens?.length || 0)
 
   return (
     <div className="page home-page">
@@ -174,9 +160,9 @@ export function HomePage() {
           </div>
           <div className="context-grid" aria-label="Current recommendation context">
             <ContextItem icon={Clock3} label="When" value={values.requestedFor ? new Date(values.requestedFor).toLocaleString('en-SG', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Any time'} />
-            <ContextItem icon={MapPin} label="Range" value={values.maxDistanceKm ? `Within ${values.maxDistanceKm} km` : values.area || (values.latitude && values.longitude ? 'Manual coordinates' : 'Any area')} />
+            <ContextItem icon={MapPin} label="Range" value={values.maxDistanceKm && values.latitude && values.longitude ? `Within ${values.maxDistanceKm} km` : 'Any distance'} />
             <ContextItem icon={WalletCards} label="Budget" value={values.maxBudget ? `${values.currency} ${values.maxBudget}` : 'Flexible'} />
-            <ContextItem icon={Sparkles} label="Hard needs" value={hardConstraints.length ? `${hardConstraints.length} applied` : 'None added'} />
+            <ContextItem icon={Sparkles} label="Profile rules" value={profileRuleCount ? `${profileRuleCount} applied` : 'Using profile'} />
           </div>
           <p className="context-trust">FoodMind uses only your own and authorised group evidence. Permission checks stay with the backend.</p>
         </div>
@@ -208,20 +194,59 @@ export function RecommendationContextPage() {
   const reference = useReferenceData()
   const preferences = usePreferences()
   const navigationState = location.state as RecommendationContextNavigationState | null
+  const [locationMessage, setLocationMessage] = useState('No location selected. Distance filtering is off.')
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [locating, setLocating] = useState(false)
   const profileDefaults = useMemo(
     () => createContextDefaults(preferences.data, searchParams.get('groupId') || ''),
     [preferences.data, searchParams],
   )
   const defaults = navigationState?.recommendationContext || profileDefaults
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ContextForm>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ContextForm>({
     resolver: zodResolver(contextSchema),
     values: defaults,
   })
+  const latitude = watch('latitude')
+  const longitude = watch('longitude')
+  const hasLocation = Boolean(latitude && longitude)
+  useEffect(() => {
+    setLocationMessage(defaults.latitude && defaults.longitude
+      ? 'Using your saved profile location. Update it here without changing your profile.'
+      : 'No location selected. Distance filtering is off.')
+  }, [defaults.latitude, defaults.longitude])
   const cancel = () => navigationState?.recommendationContext ? navigate(-1) : navigate('/', { replace: true })
   const apply = handleSubmit((recommendationContext) => navigate('/', {
     state: { recommendationContext } satisfies RecommendationContextNavigationState,
     replace: true,
   }))
+  const locate = async () => {
+    setLocating(true)
+    setLocationError(null)
+    try {
+      const coordinates = await requestCurrentLocation()
+      setValue('latitude', coordinates.latitude.toString(), { shouldValidate: true })
+      setValue('longitude', coordinates.longitude.toString(), { shouldValidate: true })
+      setLocationMessage('Using your current location for this recommendation only.')
+    } catch (error) {
+      setLocationError(errorMessage(error))
+    } finally {
+      setLocating(false)
+    }
+  }
+  const clearLocation = () => {
+    setValue('latitude', '', { shouldValidate: true })
+    setValue('longitude', '', { shouldValidate: true })
+    setValue('maxDistanceKm', '', { shouldValidate: true })
+    setLocationMessage('No location selected. Distance filtering is off.')
+    setLocationError(null)
+  }
+  const resetToProfile = () => {
+    reset(profileDefaults)
+    setLocationMessage(profileDefaults.latitude && profileDefaults.longitude
+      ? 'Using your saved profile location. Update it here without changing your profile.'
+      : 'No location selected. Distance filtering is off.')
+    setLocationError(null)
+  }
 
   return (
     <div className="page section-page narrow-page recommendation-context-page">
@@ -252,27 +277,23 @@ export function RecommendationContextPage() {
           <div className="form-grid">
             <label>Maximum budget<input type="number" min="0" step="0.01" {...register('maxBudget')} /></label>
             <label>Currency<input maxLength={3} aria-invalid={Boolean(errors.currency)} {...register('currency')} />{errors.currency && <small>{errors.currency.message}</small>}</label>
-            <label>Area<input placeholder="e.g. Tiong Bahru" {...register('area')} /></label>
-            <label>Maximum distance (km)<input type="number" min="0.1" step="0.1" {...register('maxDistanceKm')} /></label>
-            <label>Latitude (optional)<input type="number" min="-90" max="90" step="any" placeholder="1.3521" aria-invalid={Boolean(errors.latitude)} {...register('latitude')} />{errors.latitude && <small>{errors.latitude.message}</small>}</label>
-            <label>Longitude (optional)<input type="number" min="-180" max="180" step="any" placeholder="103.8198" aria-invalid={Boolean(errors.longitude)} {...register('longitude')} />{errors.longitude && <small>{errors.longitude.message}</small>}</label>
           </div>
-        </section>
-
-        <section>
-          <p className="eyebrow">Hard needs</p>
-          <h2>Protect the non-negotiables</h2>
-          <div className="form-grid">
-            <label>Maximum spice<select {...register('maxSpiceLevel')}><option value="">No limit</option>{[0, 1, 2, 3, 4, 5].map((level) => <option value={level} key={level}>{level} / 5</option>)}</select></label>
-            <label>Cleanliness evidence threshold<select {...register('minimumCleanlinessEvidenceScore')}><option value="">No threshold</option><option value="0.6">Moderate evidence</option><option value="0.8">Strong evidence</option><option value="0.9">Very strong evidence</option></select></label>
+          <div className="current-location-card">
+            <div className="current-location-copy"><p className="eyebrow">Starting point</p><h3>Use your current location</h3><p>Your location is used for this recommendation only and does not update your saved profile.</p></div>
+            <div className="current-location-actions">
+              <button className="secondary-action" type="button" disabled={locating} onClick={() => void locate()}><LocateFixed size={17} /> {locating ? 'Locating…' : hasLocation ? 'Update current location' : 'Use current location'}</button>
+              {hasLocation && <button className="text-button" type="button" onClick={clearLocation}><Trash2 size={16} /> Use any distance</button>}
+            </div>
+            <p className="current-location-status" role="status">{locationMessage}</p>
+            {locationError && <div className="form-alert" role="alert">{locationError}</div>}
+            <label>Maximum distance (km)<input type="number" min="0.1" step="0.1" disabled={!hasLocation} aria-invalid={Boolean(errors.maxDistanceKm)} {...register('maxDistanceKm')} />{errors.maxDistanceKm && <small>{errors.maxDistanceKm.message}</small>}<small>{hasLocation ? 'Limits results by distance from the selected location.' : 'Choose your current location before setting a distance.'}</small></label>
           </div>
-          <fieldset><legend>Dietary requirements</legend><div className="check-grid">{reference.data?.dietaryTags.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('requiredDietaryTagCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
-          <fieldset><legend>Allergens to avoid</legend><div className="check-grid">{reference.data?.allergens.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('avoidAllergenCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
+          <p className="field-note">Dietary requirements, allergens, spice tolerance, and cleanliness settings come from your account preferences and remain enforced automatically.</p>
         </section>
 
         {(groups.isError || reference.isError || preferences.isError) && <div className="soft-warning" role="status">Some profile context could not be loaded. You can still adjust the available fields.</div>}
         <div className="form-actions sticky-form-actions">
-          <button className="secondary-action" type="button" onClick={() => reset(profileDefaults)}>Use profile defaults</button>
+          <button className="secondary-action" type="button" onClick={resetToProfile}>Use profile defaults</button>
           <button className="secondary-action" type="button" onClick={cancel}>Cancel</button>
           <button className="primary-action" type="submit"><Check size={17} /> Apply context</button>
         </div>
@@ -380,7 +401,6 @@ export function RecommendationDetailPage() {
           <div className="result-meta"><span><MapPin size={15} /> {candidate.area || 'Area not provided'}</span><span>{candidate.priceKind === 'LAST_RECORDED' ? 'Last recorded price: ' : ''}{formatMoney(candidate.price?.amount, candidate.price?.currency)}</span>{candidate.modelScore != null && <span><Sparkles size={15} /> ML match {Math.round(candidate.modelScore * 100)}%</span>}</div>
           {isRecordCandidate && <p className="eyebrow">Historical record — current availability is unverified.</p>}
           <p className="eyebrow">Confirmed ML ranking basis</p>
-          <p className="result-description">{candidate.explanation}</p>
           <div className="signal-list">{candidate.reasonCodes.map((reason) => <span key={reason}><Check size={14} /> {reasonLabels[reason] || sentenceCase(reason)}</span>)}</div>
           {(feedback.isError || save.isError || share.isError || rerecommend.isError) && <div className="inline-error" role="alert">{errorMessage(feedback.error || save.error || share.error || rerecommend.error)}</div>}
           <div className="decision-actions"><button className="primary-action" type="button" disabled={feedback.isPending} onClick={() => feedback.mutate({ eventType: 'ACCEPTED', candidateId: candidate.candidateId })}><Check size={17} /> {feedback.isPending ? 'Accepting…' : 'Accept and record meal'}</button><button className="secondary-action" type="button" disabled={feedback.isPending || candidateIndex >= items.length - 1} onClick={() => setCandidateIndex((index) => clampCandidateIndex(index + 1, items.length))}><RotateCcw size={16} /> Try another</button></div>
