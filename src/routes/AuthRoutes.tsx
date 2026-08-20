@@ -56,18 +56,15 @@ function AuthLayout({ eyebrow, title, support, children }: { eyebrow: string; ti
   )
 }
 
-function PrivacyPolicyDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function PrivacyPolicyDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   useEffect(() => {
     const dialog = dialogRef.current
-    if (!dialog) return
-    if (open) {
-      if (typeof dialog.showModal === 'function') dialog.showModal()
-      else dialog.setAttribute('open', '')
-    } else if (dialog.open && typeof dialog.close === 'function') {
-      dialog.close()
-    }
-  }, [open])
+    if (!dialog || dialog.open) return
+    if (typeof dialog.showModal === 'function') dialog.showModal()
+    else dialog.setAttribute('open', '')
+    return () => { if (dialog.open && typeof dialog.close === 'function') dialog.close() }
+  }, [])
   return (
     <dialog ref={dialogRef} className="privacy-overlay" aria-labelledby="privacy-dialog-title" onCancel={(event) => { event.preventDefault(); onClose() }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section className="privacy-dialog">
@@ -170,7 +167,7 @@ export function RegisterPage() {
         {errors.privacyConsentAccepted && <small className="privacy-consent-error" role="alert">{errors.privacyConsentAccepted.message}</small>}
         <button className="generate-button" type="submit" disabled={isSubmitting}>{isSubmitting ? <><LoaderCircle className="spin" size={19} /> Creating account…</> : <>Create account <ArrowRight size={18} /></>}</button>
       </form>
-      <PrivacyPolicyDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+      {privacyOpen && <PrivacyPolicyDialog onClose={() => setPrivacyOpen(false)} />}
       <p className="auth-switch">Already have an account? <Link to="/login">Sign in</Link></p>
     </AuthLayout>
   )
