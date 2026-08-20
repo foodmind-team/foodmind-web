@@ -160,7 +160,7 @@ test('cook mode selection generates a real backend plan and drives the execution
   await expect(page.getByRole('progressbar', { name: /cooking plan completion/i })).toHaveAttribute('aria-valuenow', '1')
 })
 
-test('record collection filters and global search intent stay in the URL', async ({ page }) => {
+test('record collection filters and simplified Explore controls stay in the URL', async ({ page }) => {
   await mockApi(page)
   await page.goto('/records/food')
   await page.getByLabel('Page size').selectOption('50')
@@ -168,6 +168,42 @@ test('record collection filters and global search intent stay in the URL', async
 
   await page.goto('/explore?search=true')
   await expect(page.getByPlaceholder('Search places, meals, or products')).toBeFocused()
+  await expect(page.getByRole('button', { name: 'For you' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Group records' })).toBeVisible()
+  for (const removedFilter of ['Products', 'Places', 'All topics', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés']) {
+    await expect(page.getByRole('button', { name: removedFilter })).toHaveCount(0)
+  }
+})
+
+test('explore preview keeps every action visible for high-resolution portrait images', async ({ page }) => {
+  const sourceId = '00000000-0000-4000-8000-000000000081'
+  const highResolutionImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="3024" height="4032" viewBox="0 0 3024 4032"%3E%3Crect width="3024" height="4032" fill="%23657458"/%3E%3C/svg%3E'
+  await mockApi(page, { exploreItems: [{
+    sourceType: 'CURATED_PLACE',
+    sourceId,
+    title: 'Ordinary Burgers',
+    subtitle: 'One@KentRidge',
+    snippet: '1 Lower Kent Ridge Road Singapore 119082',
+    imageReference: highResolutionImage,
+    visibility: 'CURATED',
+    occurredAt: null,
+  }] })
+  for (const viewport of [{ width: 1470, height: 837 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/explore')
+    await page.getByRole('button', { name: 'Preview Ordinary Burgers' }).click()
+
+    const dialog = page.getByRole('dialog', { name: 'Ordinary Burgers' })
+    const actions = dialog.locator('.discovery-dialog-actions')
+    await expect(actions).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Save Ordinary Burgers' })).toBeVisible()
+    await expect(dialog.getByRole('link', { name: /Open full details/i })).toBeVisible()
+    await dialog.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)))
+    const actionsBox = await actions.boundingBox()
+    expect(actionsBox).not.toBeNull()
+    expect(actionsBox?.y).toBeGreaterThanOrEqual(0)
+    expect((actionsBox?.y || 0) + (actionsBox?.height || 0)).toBeLessThanOrEqual(viewport.height + 1)
+  }
 })
 
 test('legacy group join is a compatibility fallback only', async ({ page }) => {

@@ -57,10 +57,9 @@ export function ExplorePage() {
   const initialSearch = searchParams.get('q') || ''
   const [query, setQuery] = useState(initialSearch)
   const debouncedQuery = useDebounced(query.trim(), 350)
-  const type = searchParams.get('type') || ''
-  const topic = searchParams.get('topic') || ''
-  const apiType = type === 'records' ? 'FOOD_RECORD' : type === 'products' ? 'FOOD_PRODUCT' : type === 'places' ? 'PLACE' : undefined
-  const filters = useMemo(() => ({ types: apiType, topics: topic || undefined }), [apiType, topic])
+  const type = searchParams.get('type') === 'records' ? 'records' : ''
+  const apiType = type === 'records' ? 'FOOD_RECORD' : undefined
+  const filters = useMemo(() => ({ types: apiType }), [apiType])
   const explore = useInfiniteQuery({
     queryKey: queryKeys.explore.feed(filters), initialPageParam: undefined as string | undefined, enabled: debouncedQuery.length < 2,
     queryFn: async ({ pageParam }) => dataOrThrow<Schema<'ExplorePageResponse'>>(await api.GET('/explore', { params: { query: { ...filters, after: pageParam, page: 0, size: 18 } } })),
@@ -121,8 +120,7 @@ export function ExplorePage() {
       <section className="explore-controls" aria-label="Explore controls">
         <label className="explore-search"><Search size={18} /><span className="sr-only">Search authorised FoodMind content</span><input autoFocus={searchParams.get('search') === 'true'} value={query} onChange={(event) => changeQuery(event.target.value)} placeholder="Search places, meals, or products" />{query && <button type="button" onClick={() => changeQuery('')} aria-label="Clear search">Clear</button>}</label>
         <div className="explore-channel-row">
-          <div className="topic-row" aria-label="Explore source filters">{[['', 'For you'], ['records', 'Group records'], ['products', 'Products'], ['places', 'Places']].map(([value, label]) => <button className={type === value ? 'active' : ''} type="button" onClick={() => setFilter('type', value)} key={label}>{label}</button>)}</div>
-          <div className="topic-row secondary-topics" aria-label="Explore topic filters">{['', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés'].map((value) => <button className={topic === value ? 'active' : ''} type="button" onClick={() => setFilter('topic', value)} key={value || 'all'}>{value || 'All topics'}</button>)}</div>
+          <div className="topic-row" aria-label="Explore source filters">{[['', 'For you'], ['records', 'Group records']].map(([value, label]) => <button className={type === value ? 'active' : ''} type="button" onClick={() => setFilter('type', value)} key={label}>{label}</button>)}</div>
           <div className="permission-note"><ShieldCheck size={16} /><span>Only content you are authorised to see</span></div>
         </div>
       </section>

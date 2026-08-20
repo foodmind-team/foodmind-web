@@ -3223,10 +3223,6 @@ legend {
   font-weight: 720;
 }
 
-.secondary-topics {
-  margin-top: -13px;
-}
-
 .saved-card.unavailable {
   border-style: dashed;
   background: #f5f6f3;
@@ -5426,23 +5422,6 @@ textarea::placeholder {
   background: #222822;
 }
 
-.secondary-topics {
-  margin-top: 8px;
-}
-
-.secondary-topics button {
-  min-height: 30px;
-  border-color: transparent;
-  padding-inline: 9px;
-  font-size: 8px;
-}
-
-.secondary-topics button.active {
-  border-color: transparent;
-  color: var(--lime);
-  background: transparent;
-}
-
 .permission-note {
   width: fit-content;
   margin: 14px 0 0;
@@ -7192,22 +7171,6 @@ button.recipe-card.selected {
   box-shadow: inset 0 0 0 1px #343b34;
 }
 
-.explore-channel-row .secondary-topics {
-  padding-left: 10px;
-  border-left: 1px solid var(--line-soft);
-}
-
-.explore-channel-row .secondary-topics button {
-  color: #818a82;
-  padding-inline: 9px;
-}
-
-.explore-channel-row .secondary-topics button.active {
-  color: var(--lime);
-  background: transparent;
-  box-shadow: none;
-}
-
 .explore-channel-row .permission-note {
   flex: 0 0 auto;
   margin: 0 0 0 4px;
@@ -7282,6 +7245,7 @@ dialog.discovery-overlay {
   position: relative;
   display: grid;
   width: min(1180px, 100%);
+  height: min(820px, calc(100dvh - 68px));
   max-height: min(820px, calc(100dvh - 68px));
   grid-template-columns: minmax(0, 1.16fr) minmax(390px, .84fr);
   overflow: hidden;
@@ -7316,7 +7280,7 @@ dialog.discovery-overlay {
 
 .discovery-dialog-visual {
   position: relative;
-  min-height: min(720px, calc(100dvh - 70px));
+  min-height: 0;
   overflow: hidden;
   background-color: #2d372f;
 }
@@ -7358,6 +7322,7 @@ dialog.discovery-overlay {
 .discovery-dialog-copy {
   display: grid;
   min-width: 0;
+  min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
@@ -7886,7 +7851,6 @@ dialog.discovery-overlay {
     gap: 6px;
   }
 
-  .explore-channel-row .secondary-topics,
   .explore-channel-row .permission-note {
     display: none;
   }
@@ -7898,6 +7862,7 @@ dialog.discovery-overlay {
 
   .discovery-dialog {
     width: 100%;
+    height: calc(100dvh - 18px);
     max-height: calc(100dvh - 18px);
     grid-template-columns: 1fr;
     grid-template-rows: minmax(230px, 42dvh) minmax(0, 1fr);
