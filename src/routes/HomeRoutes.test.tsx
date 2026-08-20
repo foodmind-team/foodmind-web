@@ -116,6 +116,7 @@ describe('recommendation decision loop', () => {
     expect(await screen.findByRole('heading', { name: 'Laksa bowl', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('ML match 91%')).toBeInTheDocument()
     expect(screen.getByText('Confirmed ML ranking basis')).toBeInTheDocument()
+    expect(screen.queryByText('ML score confirmed from budget and location inputs.')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /try another/i }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Soba set', level: 1 })).toBeInTheDocument())
     expect(mutationCalls).toBe(0)
