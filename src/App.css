@@ -2422,8 +2422,13 @@ textarea[aria-invalid="true"] {
 }
 
 label > small {
-  color: #aa3f36;
+  color: var(--faint);
   font-size: 10px;
+}
+
+label:has([aria-invalid="true"]) > small {
+  color: var(--coral);
+  font-weight: 650;
 }
 
 fieldset {
