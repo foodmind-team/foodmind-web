@@ -4241,6 +4241,13 @@ export interface components {
             /** @description Persisted ML probability for model-ranked candidates; null when deterministic fallback was used. */
             modelScore?: number | null;
         };
+        RecommendationDecisionProfile: {
+            /** @enum {string} */
+            mode: "DEFAULT" | "CONSTRAINT_FOCUSED" | "GROUP_GUIDED";
+            appliedFactors: ("SPICE_PREFERENCE" | "ALLERGEN_AVOIDANCE" | "CUISINE_PREFERENCE" | "GROUP_MEMBER_RECORDS")[];
+            /** @description Number of authorized trusted-group food-record observations supporting returned candidates; member identities are never exposed. */
+            groupMemberEvidenceCount: number;
+        };
         RecommendationResponse: {
             /** Format: uuid */
             sessionId: string;
@@ -4267,6 +4274,8 @@ export interface components {
              * @description Absent while status is CREATED or PROCESSING; present for every terminal status.
              */
             completedAt?: string | null;
+            /** @description Immutable, non-sensitive summary of the evidence that differentiated this recommendation session. */
+            decisionProfile: components["schemas"]["RecommendationDecisionProfile"];
             items: components["schemas"]["RecommendationCandidateResponse"][];
             /** @description Backward-compatible alias for items. */
             candidates?: components["schemas"]["RecommendationCandidateResponse"][];

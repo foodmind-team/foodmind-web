@@ -51,6 +51,26 @@ describe('preferences form', () => {
     expect(parsePreferenceCodes(' vegan, Tree Nut;vegan\nsoy ')).toEqual(['VEGAN', 'TREE_NUT', 'SOY'])
   })
 
+  it('refreshes preferences from Backend and confirms the sync', async () => {
+    let requests = 0
+    server.use(
+      http.get(`${origin}/api/v1/users/me/preferences`, () => {
+        requests += 1
+        return HttpResponse.json({ ...preferences, spiceTolerance: requests === 1 ? 3 : 4 })
+      }),
+      http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(reference)),
+    )
+    const user = userEvent.setup()
+    renderPreferences()
+
+    expect(await screen.findByRole('heading', { name: 'Preferences', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Spice tolerance' })).toHaveValue('3')
+    await user.click(screen.getByRole('button', { name: 'Refresh from FoodMind' }))
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Spice tolerance' })).toHaveValue('4'))
+    expect(screen.getByText(/Synced from FoodMind at/)).toBeInTheDocument()
+  })
+
   it('uses device location without exposing coordinate or area inputs', async () => {
     const originalGeolocation = navigator.geolocation
     Object.defineProperty(navigator, 'geolocation', {
