@@ -13,6 +13,8 @@ test('generates one lead recommendation and Try another stays local', async ({ p
   let generateCalls = 0
   let idempotencyKey = ''
   let generateBody: Record<string, unknown> = {}
+  await page.context().grantPermissions(['geolocation'])
+  await page.context().setGeolocation({ latitude: 1.3521, longitude: 103.8198 })
   await mockApi(page, { onGenerate: (request) => {
     generateCalls += 1
     idempotencyKey = request.headers()['idempotency-key'] || ''
@@ -26,8 +28,9 @@ test('generates one lead recommendation and Try another stays local', async ({ p
   await expect(page).toHaveURL('/recommendation-context')
   await expect(page.getByRole('heading', { name: /shape your decision context/i })).toBeVisible()
   await page.getByLabel('Maximum budget').fill('24')
-  await page.getByLabel('Latitude (optional)').fill('1.3521')
-  await page.getByLabel('Longitude (optional)').fill('103.8198')
+  await page.getByRole('button', { name: /(?:use|update) current location/i }).click()
+  await expect(page.getByText('Using your current location for this recommendation only.')).toBeVisible()
+  await page.getByLabel(/^Maximum distance \(km\)/).fill('5')
   await page.getByRole('button', { name: /apply context/i }).click()
   await expect(page).toHaveURL('/')
   await page.getByRole('button', { name: /generate recommendation/i }).click()
@@ -36,7 +39,7 @@ test('generates one lead recommendation and Try another stays local', async ({ p
   await expect(page.getByRole('heading', { name: 'Garden chicken rice', exact: true }).first()).toBeVisible()
   expect(generateCalls).toBe(1)
   expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/)
-  expect(generateBody).toMatchObject({ maxBudget: 24, latitude: 1.3521, longitude: 103.8198 })
+  expect(generateBody).toMatchObject({ maxBudget: 24, latitude: 1.3521, longitude: 103.8198, maxDistanceKm: 5 })
 
   await page.getByRole('button', { name: /try another/i }).click()
   await expect(page.getByRole('heading', { name: 'Miso mushroom noodles', exact: true }).first()).toBeVisible()

@@ -2550,6 +2550,64 @@ legend {
   padding-top: 2px;
 }
 
+.current-location-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 24px;
+  margin-top: 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: var(--green-50);
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.current-location-copy h3 {
+  margin: 4px 0 7px;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.current-location-copy p:last-child,
+.current-location-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.current-location-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.current-location-status,
+.current-location-card > label,
+.current-location-card > .form-alert {
+  grid-column: 1 / -1;
+}
+
+.current-location-card > .form-alert {
+  margin: 0;
+}
+
+.current-location-card label small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .current-location-card {
+    grid-template-columns: 1fr;
+  }
+
+  .current-location-actions {
+    justify-content: flex-start;
+  }
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
