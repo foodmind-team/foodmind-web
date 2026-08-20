@@ -40,6 +40,8 @@ export const queryKeys = {
   cooking: {
     detail: (id: string) => ['cooking', id] as const,
     history: () => ['cooking', 'history'] as const,
+    saved: () => ['cooking', 'saved'] as const,
+    execution: (id: string) => ['cooking', id, 'execution'] as const,
     task: (id: string) => ['cooking', id, 'task'] as const,
   },
   recipes: {

@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Ban,
+  Bookmark,
+  BookmarkCheck,
   Check,
   ChefHat,
   ListChecks,
@@ -11,21 +13,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
+import { SavedSectionTabs } from '../components/saved/SavedSectionTabs'
 import { useToast } from '../components/feedback/ToastProvider'
 import { ApiError, api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
-import {
-  applyExecutionUpdate,
-  buildExecutionTimeline,
-  clearExecutionProgress,
-  computeExecutionSnapshot,
-  ExecutionConflictError,
-  initExecutionStates,
-  loadExecutionProgress,
-  saveExecutionProgress,
-  type ExecutionSnapshot,
-  type LocalTaskState,
-} from '../lib/cooking-execution'
+import { buildExecutionTimeline, computeExecutionSnapshot, initExecutionStates, type ExecutionSnapshot } from '../lib/cooking-execution'
 import { formatDateTime, sentenceCase } from '../lib/format'
 
 const PLAN_STAGES = [
@@ -90,6 +82,17 @@ function strategyReduceServings(data: Schema<'CookingPlanResponse'>) {
     ? decision.payload.servings
     : undefined
   return typeof servings === 'number' ? servings : null
+}
+
+function executionStates(
+  tasks: Schema<'CookingPlanTimelineTask'>[],
+  execution?: Schema<'CookingPlanExecutionResponse'>,
+) {
+  const states = initExecutionStates(tasks)
+  execution?.steps?.forEach((step) => {
+    if (step.stepId in states) states[step.stepId] = step.status
+  })
+  return states
 }
 export function CookingDetailPage() {
   const { planId = '' } = useParams()
@@ -252,6 +255,12 @@ export function CookingDetailPage() {
 }
 
 function FinishedPlanResult({ data }: { data: Schema<'CookingPlanResponse'> }) {
+  const execution = useQuery({
+    queryKey: queryKeys.cooking.execution(data.planId),
+    queryFn: async () => dataOrThrow<Schema<'CookingPlanExecutionResponse'>>(await api.GET('/cooking-plans/{planId}/execution', { params: { path: { planId: data.planId } } })),
+  })
+  const recipeIds = (data.sources || []).map((source) => source.sourceId).filter((id): id is string => Boolean(id))
+  const cookAgainHref = recipeIds.length ? `/cooking?${new URLSearchParams({ selected: recipeIds.join(',') })}` : '/cooking'
   return (
     <div className="page section-page cooking-result-page">
       <header className="section-page-heading"><div><p className="eyebrow">Plan finished · {formatDateTime(data.finishedAt)}</p><h1>Cooking complete</h1><p>Your allocated ingredients have been deducted from inventory.</p></div><span className="cooking-mark"><Check /></span></header>
@@ -259,7 +268,8 @@ function FinishedPlanResult({ data }: { data: Schema<'CookingPlanResponse'> }) {
         <p className="eyebrow">Completed result</p>
         <h2>{data.sources?.length || 0} {data.sources?.length === 1 ? 'dish' : 'dishes'} · {data.timeline?.length || 0} cooking steps</h2>
         <p>{data.makespanMinutes != null ? `${data.makespanMinutes} minute planned cook` : 'Cooking plan completed'}{data.reusedFromPlanId ? ' · reused from your previous equivalent plan' : ''}.</p>
-        <Link className="primary-action" to="/"><ArrowLeft size={16} /> Back to Home</Link>
+        {execution.data && <SavedPlanControls planId={data.planId} execution={execution.data} finished />}
+        <div className="generate-actions"><Link className="primary-action" to={cookAgainHref}><ChefHat size={16} /> Cook again</Link><Link className="secondary-action" to="/"><ArrowLeft size={16} /> Back to Home</Link></div>
       </section>
     </div>
   )
@@ -273,18 +283,14 @@ function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
     [data.timeline, data.miseEnPlace],
   )
   const timelineKey = tasks.map((task) => task.taskId || 'x').join('|')
-  const [execStates, setExecStates] = useState<Record<string, LocalTaskState>>(() => loadExecutionProgress(data.planId, tasks).states)
-  const [execEventId, setExecEventId] = useState(() => loadExecutionProgress(data.planId, tasks).eventId)
-  useEffect(() => {
-    const restored = loadExecutionProgress(data.planId, tasks)
-    setExecStates(restored.states)
-    setExecEventId(restored.eventId)
-  }, [data.planId, timelineKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    saveExecutionProgress(data.planId, tasks, execStates, execEventId)
-  }, [data.planId, timelineKey, execStates, execEventId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const snapshot = useMemo<ExecutionSnapshot>(() => computeExecutionSnapshot(tasks, execStates, execEventId), [tasks, execStates, execEventId])
+  const execution = useQuery({
+    queryKey: queryKeys.cooking.execution(data.planId),
+    queryFn: async () => dataOrThrow<Schema<'CookingPlanExecutionResponse'>>(await api.GET('/cooking-plans/{planId}/execution', { params: { path: { planId: data.planId } } })),
+    refetchOnWindowFocus: true,
+  })
+  const execStates = useMemo(() => executionStates(tasks, execution.data), [timelineKey, execution.data]) // eslint-disable-line react-hooks/exhaustive-deps
+  const execVersion = execution.data?.version ?? 0
+  const snapshot = useMemo<ExecutionSnapshot>(() => computeExecutionSnapshot(tasks, execStates, execVersion), [tasks, execStates, execVersion])
   const total = tasks.length
   const done = snapshot.completed.length
   const percent = total ? Math.round(done / total * 100) : 0
@@ -303,26 +309,26 @@ function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
       : null
   )
 
-  const submit = (taskId: string, status: 'IN_PROGRESS' | 'COMPLETED') => {
-    try {
-      const next = applyExecutionUpdate(tasks, execStates, execEventId, { cookingTaskId: taskId, status, expectedEventId: snapshot.expectedEventId })
-      setExecStates(next.states)
-      setExecEventId(next.eventId)
-    } catch (error) {
-      if (error instanceof ExecutionConflictError) {
-        showToast('Execution state changed elsewhere. Refreshing the board…', 'error')
-      } else {
-        showToast((error as Error).message || 'That step is not available yet.', 'error')
-      }
-    }
-  }
+  const updateStep = useMutation({
+    mutationFn: async ({ stepId, status }: { stepId: string; status: 'IN_PROGRESS' | 'COMPLETED' }) => dataOrThrow<Schema<'CookingPlanExecutionResponse'>>(await api.PATCH('/cooking-plans/{planId}/execution', {
+      params: { path: { planId: data.planId } },
+      body: { stepId, status, expectedVersion: execVersion },
+    })),
+    onSuccess: (updated) => queryClient.setQueryData(queryKeys.cooking.execution(data.planId), updated),
+    onError: () => { showToast('Progress changed on another device. The latest account state has been loaded.', 'error'); void execution.refetch() },
+  })
+  const reset = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'CookingPlanExecutionResponse'>>(await api.POST('/cooking-plans/{planId}/execution/reset', { params: { path: { planId: data.planId }, query: { expectedVersion: execVersion } } })),
+    onSuccess: (updated) => queryClient.setQueryData(queryKeys.cooking.execution(data.planId), updated),
+    onError: () => { showToast('Progress changed on another device. Refresh and try again.', 'error'); void execution.refetch() },
+  })
 
   const finish = useMutation({
     mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/finish', { params: { path: { planId: data.planId } } })),
     onSuccess: (finished) => {
-      clearExecutionProgress(data.planId)
       queryClient.setQueryData(queryKeys.cooking.detail(data.planId), finished)
       void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.saved() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() })
     },
   })
@@ -333,19 +339,43 @@ function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
       <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.completedAt)}</p><h1>Your FoodMind cooking plan</h1><p>{data.explanation || `${tasks.length} ordered tasks across the dishes you picked.`}</p></div><span className="cooking-mark"><ChefHat /></span></header>
       {data.solverStatus && <p className="field-note">Solver {sentenceCase(data.solverStatus)}{data.makespanMinutes != null ? ` · ${data.makespanMinutes} minute makespan` : ''}{data.region ? ` · region ${data.region}` : ''}</p>}
       {data.reusedFromPlanId && <p className="field-note">Reused from your previous equivalent plan.</p>}
+      {execution.data && <SavedPlanControls planId={data.planId} execution={execution.data} />}
 
-      <section className="cooking-progress-card"><div><p className="eyebrow">Execution progress</p><h2>{done} of {total} tasks complete</h2></div><strong>{percent}%</strong><div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan completion" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}><span style={{ width: `${percent}%` }} /></div>{done > 0 && !allStepsComplete && <button className="text-button" type="button" onClick={() => { clearExecutionProgress(data.planId); setExecStates(initExecutionStates(tasks)); setExecEventId(0) }}>Reset progress</button>}<small>Progress is saved on this device. Inventory is deducted when you finish the plan.</small><button className="primary-action finish-plan-action" type="button" disabled={!allStepsComplete || finish.isPending} onClick={() => finish.mutate()}><Check size={16} /> {finish.isPending ? 'Finishing plan…' : 'Finish plan'}</button></section>
+      <section className="cooking-progress-card"><div><p className="eyebrow">Execution progress</p><h2>{done} of {total} tasks complete</h2></div><strong>{percent}%</strong><div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan completion" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}><span style={{ width: `${percent}%` }} /></div>{done > 0 && !allStepsComplete && <button className="text-button" type="button" disabled={reset.isPending} onClick={() => reset.mutate()}>{reset.isPending ? 'Resetting…' : 'Reset progress'}</button>}<small>Progress is saved to your FoodMind account and shared with Android. Inventory is deducted when you finish the plan.</small><button className="primary-action finish-plan-action" type="button" disabled={!execution.isSuccess || !allStepsComplete || finish.isPending} onClick={() => finish.mutate()}><Check size={16} /> {finish.isPending ? 'Finishing plan…' : 'Finish plan'}</button></section>
 
-      {finish.isError && <div className="form-alert" role="alert">{errorMessage(finish.error)}</div>}
+      {(execution.isError || finish.isError || updateStep.isError || reset.isError) && <div className="form-alert" role="alert">{errorMessage(execution.error || finish.error || updateStep.error || reset.error)}</div>}
 
       <div className="execution-lanes">
-        {snapshot.inProgress.length > 0 && <ExecutionLane title="In progress" tone="progress" tasks={snapshot.inProgress} supplement={taskSupplement} action={(task) => <button className="lane-action" type="button" onClick={() => submit(task.taskId || '', 'COMPLETED')}><Check size={15} /> Complete</button>} />}
-        {snapshot.available.length > 0 && <ExecutionLane title="Ready to start" tone="available" tasks={snapshot.available} supplement={taskSupplement} action={(task) => <button className="lane-action" type="button" onClick={() => submit(task.taskId || '', 'IN_PROGRESS')}><ArrowRight size={15} /> Start</button>} />}
+        {snapshot.inProgress.length > 0 && <ExecutionLane title="In progress" tone="progress" tasks={snapshot.inProgress} supplement={taskSupplement} action={(task) => <button className="lane-action" type="button" disabled={!execution.isSuccess || updateStep.isPending} onClick={() => updateStep.mutate({ stepId: task.taskId || '', status: 'COMPLETED' })}><Check size={15} /> Complete</button>} />}
+        {snapshot.available.length > 0 && <ExecutionLane title="Ready to start" tone="available" tasks={snapshot.available} supplement={taskSupplement} action={(task) => <button className="lane-action" type="button" disabled={!execution.isSuccess || updateStep.isPending} onClick={() => updateStep.mutate({ stepId: task.taskId || '', status: 'IN_PROGRESS' })}><ArrowRight size={15} /> Start</button>} />}
         {snapshot.blocked.length > 0 && <ExecutionLane title="Blocked" tone="blocked" tasks={snapshot.blocked} blocked collapsible />}
         {snapshot.completed.length > 0 && <ExecutionLane title="Completed" tone="done" tasks={snapshot.completed} completed />}
       </div>
     </div>
   )
+}
+
+function SavedPlanControls({ planId, execution, finished = false }: {
+  planId: string
+  execution: Schema<'CookingPlanExecutionResponse'>
+  finished?: boolean
+}) {
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  const updateCache = (updated: Schema<'CookingPlanExecutionResponse'>) => {
+    queryClient.setQueryData(queryKeys.cooking.execution(planId), updated)
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.saved() })
+  }
+  const save = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'CookingPlanExecutionResponse'>>(await api.PUT('/cooking-plans/{planId}/saved', { params: { path: { planId } } })),
+    onSuccess: (updated) => { updateCache(updated); showToast('Cooking plan saved to your account.') },
+  })
+  const remove = useMutation({
+    mutationFn: async (resetProgress: boolean) => dataOrThrow<Schema<'CookingPlanExecutionResponse'>>(await api.DELETE('/cooking-plans/{planId}/saved', { params: { path: { planId }, query: { resetProgress } } })),
+    onSuccess: (updated) => { updateCache(updated); showToast('Cooking plan removed from Saved.') },
+  })
+  if (!execution.savedAt) return <button className="secondary-action" type="button" disabled={save.isPending} onClick={() => save.mutate()}><Bookmark size={16} /> {save.isPending ? 'Saving…' : 'Save plan'}</button>
+  return <div className="generate-actions"><span className="field-note"><BookmarkCheck size={15} /> Saved to your account</span><button className="text-button" type="button" disabled={remove.isPending} onClick={() => remove.mutate(false)}>Remove from Saved</button>{!finished && <button className="text-button" type="button" disabled={remove.isPending} onClick={() => remove.mutate(true)}>Remove &amp; reset progress</button>}</div>
 }
 
 function IngredientPullList({ items }: { items: Array<{ key: string; name: string; quantity: string }> }) {
@@ -383,6 +413,28 @@ export function CookingHistoryPage() {
       {history.isError && <ErrorState error={history.error} onRetry={() => void history.refetch()} />}
       {history.isSuccess && !items.length && <EmptyState title="No cooking plans yet" message="Generate your first plan from the recipe selection page." action={<Link className="primary-action" to="/cooking">Choose recipes</Link>} />}
       {items.length > 0 && <section className="history-strip"><div className="mini-card-grid">{items.map((plan) => <Link className="mini-card" to={`/cooking/${plan.planId}`} key={plan.planId}><span><ChefHat /></span><div><p className="eyebrow">{sentenceCase(plan.status || '')}</p><h3>{plan.sourceCount || 0} sources · {plan.taskCount || 0} tasks</h3><small>{formatDateTime(plan.createdAt)}</small></div><ArrowRight size={16} /></Link>)}</div></section>}
+    </div>
+  )
+}
+
+export function SavedCookingPlansPage() {
+  const saved = useQuery({
+    queryKey: queryKeys.cooking.saved(),
+    queryFn: async () => dataOrThrow<Schema<'CookingPlanHistoryResponse'>>(await api.GET('/cooking-plans/saved', { params: { query: { page: 0, size: 50 } } })),
+  })
+  const items = (saved.data?.items || []) as Schema<'CookingPlanSummary'>[]
+  return (
+    <div className="page section-page">
+      <header className="section-page-heading"><div><p className="eyebrow">Saved · Cooking Plans</p><h1>Continue where you left off.</h1><p>Plans, completion state, and step progress are stored in your FoodMind account and shared with Android.</p></div><Link className="primary-action" to="/cooking"><ChefHat size={17} /> Start cooking</Link></header>
+      <SavedSectionTabs />
+      {saved.isLoading && <LoadingState label="Opening saved cooking plans…" />}
+      {saved.isError && <ErrorState error={saved.error} onRetry={() => void saved.refetch()} />}
+      {saved.isSuccess && !items.length && <EmptyState title="No saved cooking plans" message="Open a generated plan and select Save plan to keep it here." action={<Link className="primary-action" to="/cooking/history">Open plan history</Link>} />}
+      {items.length > 0 && <section className="saved-grid">{items.map((plan) => {
+        const label = plan.finishedAt ? 'Completed' : 'In progress'
+        const title = plan.dishNames?.filter(Boolean).join(' · ') || `${plan.sourceCount || 0} dish cooking plan`
+        return <article className="saved-card" key={plan.planId}><div className="saved-visual"><ChefHat /></div><div><p className="eyebrow">{label} · saved {formatDateTime(plan.savedAt)}</p><h2>{title}</h2><p>{plan.finishedAt ? `Completed ${formatDateTime(plan.finishedAt)}` : `${plan.completedStepCount || 0} of ${plan.taskCount || 0} scheduled steps completed`}{plan.makespanMinutes ? ` · ${plan.makespanMinutes} min` : ''}</p><Link className="text-button" to={`/cooking/${plan.planId}`}>{plan.finishedAt ? 'View plan' : 'Continue cooking'} <ArrowRight size={15} /></Link></div></article>
+      })}</section>}
     </div>
   )
 }
