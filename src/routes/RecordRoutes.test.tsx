@@ -139,6 +139,32 @@ describe('record detail navigation', () => {
   })
 })
 
+describe('record detail navigation', () => {
+  it('returns to the originating trusted group', async () => {
+    server.use(http.get(`${origin}/api/v1/food-records/${recordId}`, () => HttpResponse.json({
+      id: recordId,
+      mealNameSnapshot: 'Laksa',
+      occurredAt: '2026-08-01T12:00:00Z',
+      price: null,
+      rating: 4,
+      comment: null,
+      wouldEatAgain: true,
+      visibility: 'GROUP',
+      groupId: 'group-1',
+      createdAt: '2026-08-01T12:00:00Z',
+      updatedAt: '2026-08-01T12:00:00Z',
+      version: 0,
+    })))
+
+    renderDetail('?fromGroup=group-1')
+
+    const backLink = await screen.findByRole('link', { name: 'Back to group' })
+    expect(backLink).toHaveAttribute('href', '/groups/group-1')
+    await userEvent.click(backLink)
+    expect(await screen.findByText('Group workspace opened')).toBeInTheDocument()
+  })
+})
+
 describe('recommendation record handoff', () => {
   it('posts the prefilled meal for a trusted group and opens it in Explore', async () => {
     let postedBody: Record<string, unknown> = {}
