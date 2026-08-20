@@ -1,5 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
+import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
+import { describe, expect, it, vi } from 'vitest'
 import { aggregateDimensionMetrics, displayMetricValue, latestMetric, type DashboardMetric } from '../lib/insight-metrics'
+import { server } from '../test/server'
+import { DashboardPage } from './AnalyticsRoutes'
+
+vi.mock('recharts', () => ({
+  Bar: () => null,
+  BarChart: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  CartesianGrid: () => null,
+  Cell: () => null,
+  Legend: () => null,
+  Line: () => null,
+  LineChart: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  Pie: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  PieChart: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ResponsiveContainer: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  Tooltip: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+}))
+
+const origin = 'http://localhost:3000'
+
+function renderDashboard() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={client}><MemoryRouter><DashboardPage /></MemoryRouter></QueryClientProvider>)
+}
 
 const metric = (overrides: Partial<DashboardMetric>): DashboardMetric => ({
   code: 'FOOD_COUNT',
@@ -12,6 +42,27 @@ const metric = (overrides: Partial<DashboardMetric>): DashboardMetric => ({
 })
 
 describe('insight metric presentation', () => {
+  it('lets Backend resolve the account time zone instead of sending the device time zone', async () => {
+    let requestedTimeZone: string | null | undefined
+    server.use(http.get(`${origin}/api/v1/dashboard`, ({ request }) => {
+      requestedTimeZone = new URL(request.url).searchParams.get('timeZone')
+      return HttpResponse.json({
+        from: '2026-05-22T16:00:00Z',
+        to: '2026-08-21T16:00:00Z',
+        groupBy: 'WEEK',
+        timeZone: 'Asia/Shanghai',
+        empty: true,
+        metrics: [],
+        spendingTotals: [],
+      })
+    }))
+
+    renderDashboard()
+
+    expect(await screen.findByRole('heading', { name: 'No data for this range' })).toBeInTheDocument()
+    expect(requestedTimeZone).toBeNull()
+  })
+
   it('selects the latest returned value without combining periods', () => {
     const latest = latestMetric([
       metric({ period: '2026-08-03', value: 11 }),
