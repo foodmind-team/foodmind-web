@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
 import { server } from '../test/server'
-import { CookingDetailPage, CookingSettingsPage } from './CookingRoutes'
+import { CookingDetailPage, CookingSettingsPage, SavedCookingPlansPage } from './CookingRoutes'
 import { CookingSelectPage } from './CookingSelectionPage'
 
 vi.mock('../app/providers/AuthProvider', () => ({
@@ -134,13 +134,33 @@ const confirmationPlan = {
 function renderCookingRoutes(initialEntry = `/cooking?selected=${recipeOneId},${recipeTwoId}`) {
   server.use(http.get(`${origin}/api/v1/recipes`, () => HttpResponse.json(recipePage)))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/" element={<h1>Home</h1>} /><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/settings" element={<CookingSettingsPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/" element={<h1>Home</h1>} /><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/history" element={<h1>Plan history</h1>} /><Route path="/cooking/settings" element={<CookingSettingsPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/saved/cooking-plans" element={<SavedCookingPlansPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
 }
 
 beforeEach(() => {
   localStorage.clear()
+  let version = 0
+  let savedAt: string | null = null
+  const steps = new Map<string, 'IN_PROGRESS' | 'COMPLETED'>()
+  const execution = () => ({
+    planId,
+    savedAt,
+    finishedAt: null,
+    version,
+    steps: [...steps].map(([stepId, status]) => ({ stepId, status, updatedAt: '2026-08-02T10:10:00Z' })),
+  })
   server.use(
     http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(accountPreferences)),
+    http.get(`${origin}/api/v1/cooking-plans/${planId}/execution`, () => HttpResponse.json(execution())),
+    http.patch(`${origin}/api/v1/cooking-plans/${planId}/execution`, async ({ request }) => {
+      const body = await request.json() as { stepId: string; status: 'IN_PROGRESS' | 'COMPLETED'; expectedVersion: number }
+      if (body.expectedVersion !== version) return HttpResponse.json({ code: 'CONFLICT', message: 'Changed elsewhere' }, { status: 409 })
+      steps.set(body.stepId, body.status); version += 1
+      return HttpResponse.json(execution())
+    }),
+    http.post(`${origin}/api/v1/cooking-plans/${planId}/execution/reset`, () => { steps.clear(); version += 1; return HttpResponse.json(execution()) }),
+    http.put(`${origin}/api/v1/cooking-plans/${planId}/saved`, () => { savedAt = '2026-08-02T10:20:00Z'; version += 1; return HttpResponse.json(execution()) }),
+    http.delete(`${origin}/api/v1/cooking-plans/${planId}/saved`, () => { savedAt = null; version += 1; return HttpResponse.json(execution()) }),
   )
 })
 
@@ -361,7 +381,7 @@ describe('cooking execution progress', () => {
     expect(blocked).toHaveAttribute('open')
   })
 
-  it('restores completed steps after the plan page is reopened', async () => {
+  it('restores account-synchronised steps after the plan page is reopened', async () => {
     const user = userEvent.setup()
     server.use(http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)))
     const first = renderCookingRoutes(`/cooking/${planId}`)
@@ -373,6 +393,17 @@ describe('cooking execution progress', () => {
 
     renderCookingRoutes(`/cooking/${planId}`)
     expect(await screen.findByRole('heading', { name: '1 of 3 tasks complete' })).toBeInTheDocument()
+  })
+
+  it('saves a generated plan to the account', async () => {
+    const user = userEvent.setup()
+    server.use(http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)))
+    renderCookingRoutes(`/cooking/${planId}`)
+
+    await user.click(await screen.findByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByText('Saved to your account')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove from Saved' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove & reset progress' })).toBeInTheDocument()
   })
 
   it('enables finish only after every step, then shows the persisted result and home action', async () => {

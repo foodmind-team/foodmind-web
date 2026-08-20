@@ -134,7 +134,7 @@ export function buildExecutionTimeline(
     .sort((a, b) => (a.sequenceNo ?? 0) - (b.sequenceNo ?? 0))
     .filter((item) => !prepAlreadyScheduled(item, timeline))
     .map((item, index): CookingTimelineTask => ({
-      taskId: `mise-en-place-${item.sequenceNo ?? index + 1}-${index}`,
+      taskId: `mise:${item.sequenceNo ?? index + 1}`,
       instruction: item.instruction || [item.operation, item.ingredient].filter(Boolean).join(' ') || 'Prepare ingredients',
       startMinute: 0,
       durationMinutes: item.durationMinutes ?? undefined,
