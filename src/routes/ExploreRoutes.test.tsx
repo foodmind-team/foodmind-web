@@ -25,6 +25,51 @@ function renderExplore() {
 }
 
 describe('Explore discovery preview', () => {
+  it('offers only the For you and Group records feeds', async () => {
+    const requestUrls: string[] = []
+    server.use(http.get(`${origin}/api/v1/explore`, ({ request }) => {
+      requestUrls.push(request.url)
+      return HttpResponse.json({ items: [], nextCursor: null, hasNext: false })
+    }))
+
+    renderExplore()
+
+    expect(screen.getByRole('button', { name: 'For you' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Group records' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Products' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Places' })).not.toBeInTheDocument()
+    for (const removedFilter of ['All topics', 'Quick dinner', 'Group-tested', 'Cooking', 'Cafés']) {
+      expect(screen.queryByRole('button', { name: removedFilter })).not.toBeInTheDocument()
+    }
+
+    await userEvent.click(screen.getByRole('button', { name: 'Group records' }))
+    await waitFor(() => expect(requestUrls.some((url) => new URL(url).searchParams.get('types') === 'FOOD_RECORD')).toBe(true))
+  })
+
+  it('uses the Backend-owned image reference for a curated place', async () => {
+    const placeId = 'ff90c8dc-7fe3-50c6-aaf0-8ea10f73c782'
+    const imageReference = `/api/v1/catalogue-images/${placeId}`
+    server.use(http.get(`${origin}/api/v1/explore`, () => HttpResponse.json({
+      items: [{
+        sourceType: 'CURATED_PLACE',
+        sourceId: placeId,
+        title: 'Udon Don Bar',
+        subtitle: 'NUS University Town',
+        snippet: null,
+        imageReference,
+        visibility: 'CURATED',
+        occurredAt: null,
+      }],
+      nextCursor: null,
+      hasNext: false,
+    })))
+
+    const view = renderExplore()
+    await screen.findByRole('button', { name: 'Preview Udon Don Bar' })
+
+    expect(view.container.querySelector(`img[src="${imageReference}"]`)).toBeInTheDocument()
+  })
+
   it('opens an accessible preview without losing the full detail destination', async () => {
     server.use(http.get(`${origin}/api/v1/explore`, () => HttpResponse.json({
       items: [{

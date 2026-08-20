@@ -6,7 +6,6 @@ import { EmptyState, ErrorState, LoadingState } from '../components/feedback/Sta
 import { api, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
 import { queryKeys } from '../lib/api/query-keys'
 import { prepareCommand, type PendingCommand } from '../lib/commands'
-import { loadCookingPreferences } from '../lib/cooking-preferences'
 
 function optionalNumber(value: string) {
   return value.trim() ? Number(value) : null
@@ -47,7 +46,6 @@ export function CookingSelectPage() {
   const [servings, setServings] = useState(2)
   const [servingsTouched, setServingsTouched] = useState(false)
   const [maxMinutes, setMaxMinutes] = useState('')
-  const preferences = useMemo(loadCookingPreferences, [])
   const accountPreferences = useQuery({
     queryKey: queryKeys.users.preferences(),
     queryFn: async () => dataOrThrow<Schema<'UserPreferencesResponse'>>(await api.GET('/users/me/preferences')),
@@ -73,7 +71,7 @@ export function CookingSelectPage() {
     recipeIds: selectedRecipes.map((recipe) => recipe.id),
     servings: effectiveServings,
     maxMinutes: optionalNumber(maxMinutes),
-    region: preferences.region,
+    region: accountPreferences.data?.cookingRegion || 'SG',
     requiredDietaryTagCodes: accountPreferences.data?.dietaryTagCodes || [],
     avoidAllergenCodes: accountPreferences.data?.allergens.map((item) => item.code) || [],
   }

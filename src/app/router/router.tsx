@@ -41,6 +41,7 @@ export const router = createBrowserRouter([
         { path: 'saved/recipes/new', lazy: async () => ({ Component: (await import('../../routes/RecipeImportRoutes')).RecipeImportStartPage }) },
         { path: 'saved/recipes/manual', lazy: async () => ({ Component: (await import('../../routes/RecipeRoutes')).RecipeEditorPage }) },
         { path: 'saved/recipes/:recipeId/edit', lazy: async () => ({ Component: (await import('../../routes/RecipeRoutes')).RecipeEditorPage }) },
+        { path: 'saved/cooking-plans', lazy: async () => ({ Component: (await import('../../routes/CookingRoutes')).SavedCookingPlansPage }) },
         { path: 'cooking', lazy: async () => ({ Component: (await import('../../routes/CookingSelectionPage')).CookingSelectPage }) },
         { path: 'cooking/import', lazy: async () => ({ Component: (await import('../../routes/RecipeImportRoutes')).RecipeImportStartPage }) },
         { path: 'cooking/import/:importId', lazy: async () => ({ Component: (await import('../../routes/RecipeImportRoutes')).RecipeImportSessionPage }) },

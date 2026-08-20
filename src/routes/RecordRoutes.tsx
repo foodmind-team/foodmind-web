@@ -7,15 +7,16 @@ import { EmptyState, ErrorState, LoadingState } from '../components/feedback/Sta
 import { SafeImage } from '../components/media/SafeImage'
 import { useToast } from '../components/feedback/ToastProvider'
 import { api, ApiError, dataOrThrow, errorMessage, type Schema } from '../lib/api/client'
-import { deleteRecordMedia, mediaValidationMessage, uploadRecordMedia } from '../lib/api/media'
+import { deleteRecordMedia, mediaValidationMessage, normaliseRecordMedia, uploadRecordMedia } from '../lib/api/media'
 import { queryKeys } from '../lib/api/query-keys'
 import { quotedVersion } from '../lib/commands'
 import { formatDateTime, formatMoney, sentenceCase, toLocalDateTimeValue } from '../lib/format'
 import { localCalendarDate } from '../lib/local-date'
 
 type RecordType = 'food' | 'drink'
-type FoodRecord = Schema<'FoodRecordResponse'>
-type DrinkRecord = Schema<'DrinkRecordResponse'>
+type ManageableRecord = { canManage?: boolean }
+type FoodRecord = Schema<'FoodRecordResponse'> & ManageableRecord
+type DrinkRecord = Schema<'DrinkRecordResponse'> & ManageableRecord
 type AnyRecord = FoodRecord | DrinkRecord
 
 function defaultDate(offsetDays = 0) {
@@ -164,8 +165,8 @@ function recordDefaults(type: RecordType, record?: AnyRecord | null, searchParam
     placeId: food?.placeId || drink?.placeId || searchParams?.get('placeId') || '',
     cuisineId: food?.cuisineId || '',
     occurredAt: toLocalDateTimeValue(record?.occurredAt),
-    price: record?.price?.amount?.toString() || '',
-    currency: record?.price?.currency || 'SGD',
+    price: record?.price?.amount?.toString() || searchParams?.get('price') || '',
+    currency: record?.price?.currency || searchParams?.get('currency') || 'SGD',
     rating: record?.rating?.toString() || '',
     comment: record?.comment || '',
     repeatIntent: food?.wouldEatAgain === true || drink?.wouldBuyAgain === true ? 'true' : food?.wouldEatAgain === false || drink?.wouldBuyAgain === false ? 'false' : '',
@@ -207,7 +208,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
   const { showToast } = useToast()
   const { groups, catalogue } = useRecordLookups()
   const [conflict, setConflict] = useState(false)
-  const [photo, setPhoto] = useState<File | null>(null)
+  const [photo, setPhoto] = useState<{ blob: Blob; name: string } | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -217,20 +218,28 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
   const visibility = watch('visibility')
   const sessionId = searchParams.get('sessionId')
   const candidateId = searchParams.get('candidateId')
+  const fromRecommendation = !recordId && currentType === 'food' && Boolean(sessionId && candidateId)
 
   useEffect(() => reset({ ...defaults, type: currentType }), [currentType, defaults, reset])
   useEffect(() => {
     if (!photo) { setPhotoPreview(null); return }
-    const preview = URL.createObjectURL(photo)
+    const preview = URL.createObjectURL(photo.blob)
     setPhotoPreview(preview)
     return () => URL.revokeObjectURL(preview)
   }, [photo])
 
-  const choosePhoto = (file?: File) => {
+  const choosePhoto = async (file?: File) => {
     if (!file) { setPhoto(null); setPhotoError(null); return }
     const validation = mediaValidationMessage(file)
-    setPhotoError(validation)
-    setPhoto(validation ? null : file)
+    if (validation && file.type) { setPhotoError(validation); setPhoto(null); return }
+    try {
+      const blob = await normaliseRecordMedia(file)
+      setPhoto({ blob, name: blob === file ? file.name : `${file.name.replace(/\.[^.]+$/, '') || 'image'}.jpg` })
+      setPhotoError(null)
+    } catch (error) {
+      setPhoto(null)
+      setPhotoError(error instanceof Error ? error.message : 'Choose a JPEG, PNG, or WebP image, or an image that can be converted to JPEG.')
+    }
   }
 
   const submit = handleSubmit(async (values) => {
@@ -244,7 +253,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
     try {
       if (photo) {
         setUploadingPhoto(true)
-        const asset = await uploadRecordMedia(photo)
+        const asset = await uploadRecordMedia(photo.blob)
         newMediaAssetId = asset.mediaAssetId
       }
       let saved: AnyRecord
@@ -275,8 +284,10 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
       void queryClient.invalidateQueries({ queryKey: ['groups'] })
       void queryClient.invalidateQueries({ queryKey: ['explore'] })
       void queryClient.invalidateQueries({ queryKey: ['search'] })
-      showToast(recordId ? 'Record updated.' : 'Record added to your history.')
-      navigate(`/records/${currentType}/${saved.id}`)
+      showToast(recordId ? 'Record updated.' : fromRecommendation ? 'Meal recorded. Opening it in Explore.' : 'Record added to your history.')
+      navigate(fromRecommendation
+        ? `/explore?type=records&view=${encodeURIComponent(`GROUP_RECORD:${saved.id}`)}`
+        : `/records/${currentType}/${saved.id}`)
     } catch (error) {
       if (newMediaAssetId && !attachedToRecord) await deleteRecordMedia(newMediaAssetId).catch(() => undefined)
       if (error instanceof ApiError && error.status === 409) setConflict(true)
@@ -300,6 +311,7 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
 
   return (
     <form className="record-form card-form" onSubmit={(event) => void submit(event)} noValidate>
+      {fromRecommendation && <div className="soft-warning" role="status"><strong>Recommendation accepted.</strong> Review what FoodMind filled in, add what you actually ate, then save to open this meal in Explore.</div>}
       {!recordId && <div className="segmented-control" aria-label="Record type"><label className={currentType === 'food' ? 'active' : ''}><input type="radio" value="food" {...register('type')} /> <Utensils size={17} /> Food</label><label className={currentType === 'drink' ? 'active' : ''}><input type="radio" value="drink" {...register('type')} /> <Coffee size={17} /> Drink</label></div>}
       {conflict && <div className="conflict-panel" role="alert"><strong>A newer version is available.</strong><p>Your draft is still here. Reload the latest record before deciding what to reapply.</p><button className="secondary-action" type="button" onClick={() => window.location.reload()}>Reload latest</button></div>}
       {errors.root && <div className="form-alert" role="alert">{errors.root.message}</div>}
@@ -313,20 +325,21 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
         <label>Rating<select {...register('rating')} aria-invalid={Boolean(errors.rating)}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option value={rating} key={rating}>{rating} / 5</option>)}</select>{errors.rating && <small>{errors.rating.message}</small>}</label>
         <label>{currentType === 'food' ? 'Would eat again?' : 'Would buy again?'}<select {...register('repeatIntent')} aria-invalid={Boolean(errors.repeatIntent)}><option value="">Not sure</option><option value="true">Yes</option><option value="false">No</option></select>{errors.repeatIntent && <small>{errors.repeatIntent.message}</small>}</label>
         {currentType === 'drink' && <><label>Sweetness level<select {...register('sweetnessLevel')} aria-invalid={Boolean(errors.sweetnessLevel)}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select>{errors.sweetnessLevel && <small>{errors.sweetnessLevel.message}</small>}</label><label>Ice level<select {...register('iceLevel')} aria-invalid={Boolean(errors.iceLevel)}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select>{errors.iceLevel && <small>{errors.iceLevel.message}</small>}</label></>}
-        <label>Visibility<select {...register('visibility')}><option value="PRIVATE">Private</option><option value="GROUP">A trusted group</option></select></label>
+        <label>Who can see this in Explore?<select {...register('visibility')}><option value="PRIVATE">Only me</option><option value="GROUP">A trusted group</option></select></label>
         {visibility === 'GROUP' && <label>Group<select {...register('groupId')} aria-invalid={Boolean(errors.groupId)}><option value="">Choose a group</option>{groups.data?.filter((group) => group.status === 'ACTIVE').map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>{errors.groupId && <small>{errors.groupId.message}</small>}</label>}
       </div>
+      <p className="field-note">Your record appears in your own Explore. Choose a trusted group to share it with active group members too.</p>
       <label>Notes<textarea rows={4} maxLength={4_000} {...register('comment')} />{errors.comment && <small>{errors.comment.message}</small>}</label>
       <section className="media-upload-field" aria-labelledby="record-photo-title">
-        <div className="media-upload-copy"><span><ImagePlus /></span><div><p className="eyebrow">Optional photo</p><h2 id="record-photo-title">Add one secure image</h2><p>JPEG, PNG, or WebP · up to 5 MB. FoodMind verifies the file before attaching it to this record.</p></div></div>
-        {photoPreview ? <div className="media-preview"><img src={photoPreview} alt="Selected record upload preview" referrerPolicy="no-referrer" /><div><strong>{photo?.name}</strong><small>{photo ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : ''}</small><button className="text-button danger-link" type="button" onClick={() => choosePhoto()}><X size={15} /> Remove selection</button></div></div> : <label className="media-drop-control"><ImagePlus size={21} /><span><strong>{record?.mediaAssetId ? 'Replace the stored image' : 'Choose an image'}</strong><small>The file is uploaded only when you save the record.</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label>}
+        <div className="media-upload-copy"><span><ImagePlus /></span><div><p className="eyebrow">Optional photo</p><h2 id="record-photo-title">Add one secure image</h2><p>JPEG, PNG, WebP, HEIC, and other browser-decodable images · up to 5 MB after conversion. Other formats are converted to JPEG before upload.</p></div></div>
+        {photoPreview ? <div className="media-preview"><img src={photoPreview} alt="Selected record upload preview" referrerPolicy="no-referrer" /><div><strong>{photo?.name}</strong><small>{photo ? `${(photo.blob.size / 1024 / 1024).toFixed(2)} MB` : ''}</small><button className="text-button danger-link" type="button" onClick={() => void choosePhoto()}><X size={15} /> Remove selection</button></div></div> : <label className="media-drop-control"><ImagePlus size={21} /><span><strong>{record?.mediaAssetId ? 'Replace the stored image' : 'Choose an image'}</strong><small>The file is converted to JPEG when needed, then uploaded only when you save the record.</small></span><input type="file" accept="image/*,.heic,.heif" onChange={(event) => void choosePhoto(event.target.files?.[0])} /></label>}
         {record?.imageUrl && !photo && <div className="media-preview"><SafeImage src={record.imageUrl} alt="Current stored record image" fallback={<span className="media-image-fallback"><Image size={22} /><small>Image unavailable</small></span>} /><div><strong>Current verified image</strong><small>The read link is temporary and refreshed with this record.</small></div></div>}
         {record?.mediaAssetId && !photo && !record.imageUrl && <p className="media-existing"><ShieldCheck size={16} /> A verified image is attached, but it is not currently available to display.</p>}
         {photoError && <div className="inline-error" role="alert">{photoError}</div>}
         <p className="field-note">Saved images are private and displayed with short-lived authorised links.</p>
       </section>
       <p className="field-note">Optional fields cannot be explicitly cleared yet; the backend currently treats omitted and null values as unchanged on edits.</p>
-      <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || uploadingPhoto}>{uploadingPhoto ? 'Securing image…' : isSubmitting ? 'Saving…' : recordId ? 'Save changes' : 'Add to history'} <Check size={17} /></button></div>
+      <div className="form-actions"><Link className="secondary-action" to={recordId ? `/records/${type}/${recordId}` : fromRecommendation ? `/recommendations/${sessionId}` : '/history'}>Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || uploadingPhoto}>{uploadingPhoto ? 'Securing image…' : isSubmitting ? 'Saving…' : recordId ? 'Save changes' : fromRecommendation ? 'Post meal to Explore' : 'Add to history'} <Check size={17} /></button></div>
     </form>
   )
 }
@@ -334,7 +347,8 @@ function RecordForm({ type, record, recordId }: { type: RecordType; record?: Any
 export function RecordComposerPage() {
   const [searchParams] = useSearchParams()
   const type = searchParams.get('type') === 'drink' ? 'drink' : 'food'
-  return <div className="page section-page narrow-page"><header className="section-page-heading"><div><p className="eyebrow">A signal you control</p><h1>Record a meal or drink</h1><p>Keep the details that will be useful later, with an optional backend-verified photo.</p></div></header><RecordForm type={type} /></div>
+  const fromRecommendation = type === 'food' && Boolean(searchParams.get('sessionId') && searchParams.get('candidateId'))
+  return <div className="page section-page narrow-page"><header className="section-page-heading"><div><p className="eyebrow">{fromRecommendation ? 'Accepted recommendation' : 'A signal you control'}</p><h1>{fromRecommendation ? 'Record what you ate' : 'Record a meal or drink'}</h1><p>{fromRecommendation ? 'Confirm the suggested details, add your experience, and choose who can see it in Explore.' : 'Keep the details that will be useful later, with an optional backend-verified photo.'}</p></div></header><RecordForm type={type} /></div>
 }
 
 function useRecord(type: string, id: string) {
@@ -349,6 +363,7 @@ function useRecord(type: string, id: string) {
 
 export function RecordDetailPage() {
   const { recordType = 'food', id = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -373,9 +388,12 @@ export function RecordDetailPage() {
   const title = 'mealNameSnapshot' in data ? data.mealNameSnapshot : data.drinkName
   const place = 'mealNameSnapshot' in data ? data.placeNameSnapshot : data.shopNameSnapshot
   const repeat = 'mealNameSnapshot' in data ? data.wouldEatAgain : data.wouldBuyAgain
+  const fromGroup = searchParams.get('fromGroup')
+  const backPath = fromGroup ? `/groups/${encodeURIComponent(fromGroup)}` : '/history'
+  const backLabel = fromGroup ? 'Back to group' : 'History'
   return (
     <div className="page section-page narrow-page">
-      <Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link>
+      <Link className="back-link" to={backPath}><ArrowLeft size={16} /> {backLabel}</Link>
       <header className="record-hero">
         <span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span>
         <div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div>
@@ -398,12 +416,13 @@ export function RecordDetailPage() {
               fallback={<span className="stored-media-fallback"><Image size={24} /><small>Image unavailable</small></span>}
             />
             <div><p className="eyebrow">Image attachment</p><h2>Verified record image</h2><p>The private image is loaded through a short-lived authorised link.</p></div>
-            <button className="secondary-action danger" type="button" onClick={() => setConfirmingMedia(true)}><Trash2 size={16} /> Delete image</button>
+            {data.canManage && <button className="secondary-action danger" type="button" onClick={() => setConfirmingMedia(true)}><Trash2 size={16} /> Delete image</button>}
           </section>
         )}
         {mediaDeleted && <p className="media-existing"><Check size={16} /> The stored image asset has been deleted.</p>}
-        {confirmingMedia && data.mediaAssetId && <div className="confirm-panel" role="alert" aria-labelledby="delete-media-title"><h2 id="delete-media-title">Delete the stored image?</h2><p>This removes the backend media asset. The meal or drink record will remain.</p>{removeMedia.isError && <p className="inline-error">{errorMessage(removeMedia.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirmingMedia(false)}>Keep image</button><button className="primary-action danger" type="button" disabled={removeMedia.isPending} onClick={() => removeMedia.mutate(data.mediaAssetId!)}>Delete image</button></div></div>}
-        <div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit if you own it</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>
+        {confirmingMedia && data.canManage && data.mediaAssetId && <div className="confirm-panel" role="alert" aria-labelledby="delete-media-title"><h2 id="delete-media-title">Delete the stored image?</h2><p>This removes the backend media asset. The meal or drink record will remain.</p>{removeMedia.isError && <p className="inline-error">{errorMessage(removeMedia.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirmingMedia(false)}>Keep image</button><button className="primary-action danger" type="button" disabled={removeMedia.isPending} onClick={() => removeMedia.mutate(data.mediaAssetId!)}>Delete image</button></div></div>}
+        {data.canManage && <div className="form-actions"><Link className="primary-action" to={`/records/${type}/${id}/edit`}><Edit3 size={17} /> Edit record</Link><button className="secondary-action danger" type="button" onClick={() => setConfirming(true)}><Trash2 size={17} /> Delete</button></div>}
+        {!data.canManage && <p className="media-existing"><ShieldCheck size={16} /> This group record is read-only. Only its owner can edit or delete the record or its image.</p>}
         {confirming && <div className="confirm-panel" role="alert" aria-labelledby="delete-title"><h2 id="delete-title">Delete this record?</h2><p>This removes it from normal history views and cannot be undone from the web app.{data.mediaAssetId && !mediaDeleted ? ' Delete its stored image separately first if you no longer want that asset retained.' : ''}</p>{remove.isError && <p className="inline-error">{errorMessage(remove.error)}</p>}<div className="form-actions"><button className="secondary-action" type="button" onClick={() => setConfirming(false)}>Keep record</button><button className="primary-action danger" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>Delete record</button></div></div>}
       </section>
     </div>

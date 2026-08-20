@@ -491,6 +491,14 @@ components:
           type: string
           maxLength: 20
           example: LESS
+        cookingRegion:
+          type: string
+          enum:
+            - SG
+            - US
+            - CN
+          description: Account-synchronised region used for cooking guidance across clients.
+          example: SG
         likedCuisineCodes:
           type: array
           items:
@@ -523,6 +531,18 @@ components:
           example:
             - LUNCH
             - DINNER
+    UpdateCookingRegionRequest:
+      type: object
+      required:
+        - cookingRegion
+      properties:
+        cookingRegion:
+          type: string
+          enum:
+            - SG
+            - US
+            - CN
+          example: SG
     HardConstraintSummary:
       type: object
       required:
@@ -544,6 +564,7 @@ components:
           required:
             - currency
             - cleanlinessPriority
+            - cookingRegion
             - likedCuisineCodes
             - dislikedCuisineCodes
             - dietaryTagCodes
@@ -1048,6 +1069,7 @@ components:
         - mealNameSnapshot
         - occurredAt
         - visibility
+        - canManage
         - createdAt
         - updatedAt
         - version
@@ -1118,6 +1140,9 @@ components:
           format: uri
           nullable: true
           description: Short-lived authorized image URL; null when media is disabled or unavailable.
+        canManage:
+          type: boolean
+          description: True only when the current user owns the record and may edit or delete it and its media.
         createdAt:
           type: string
           format: date-time
@@ -1228,6 +1253,7 @@ components:
         - shopNameSnapshot
         - occurredAt
         - visibility
+        - canManage
         - createdAt
         - updatedAt
         - version
@@ -1291,6 +1317,9 @@ components:
           format: uri
           nullable: true
           description: Short-lived authorized image URL; null when media is disabled or unavailable.
+        canManage:
+          type: boolean
+          description: True only when the current user owns the record and may edit or delete it and its media.
         createdAt:
           type: string
           format: date-time
@@ -2145,6 +2174,17 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: When Agent generation reached a terminal state.
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user finished every cooking step and inventory was atomically consumed.
+        reusedFromPlanId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Previous equivalent READY plan whose schedule was reused after current inventory validation.
         solverStatus:
           type: string
           nullable: true
@@ -2476,13 +2516,28 @@ components:
         taskCount:
           type: integer
           minimum: 0
+        completedStepCount:
+          type: integer
+          minimum: 0
         makespanMinutes:
           type: integer
           nullable: true
+        dishNames:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
           format: date-time
         completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        savedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
           type: string
           format: date-time
           nullable: true
@@ -2495,6 +2550,56 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/CookingPlanSummary'
+    CookingPlanExecutionUpdateRequest:
+      type: object
+      required: [stepId, status, expectedVersion]
+      properties:
+        stepId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED]
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 0
+    CookingPlanExecutionStep:
+      type: object
+      required: [stepId, status, updatedAt]
+      properties:
+        stepId:
+          type: string
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED]
+        updatedAt:
+          type: string
+          format: date-time
+    CookingPlanExecutionResponse:
+      type: object
+      required: [planId, version, steps]
+      properties:
+        planId:
+          type: string
+          format: uuid
+        savedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingPlanExecutionStep'
     CookingPlanAsyncAcceptedResponse:
       type: object
       required: [planId, status, taskId, location]
@@ -3070,8 +3175,8 @@ components:
         imageReference:
           type: string
           nullable: true
-          format: uri
-          description: Short-lived authorized image URL for READY record media.
+          format: uri-reference
+          description: Public relative curated-catalogue image path or short-lived authorized URL for READY record media.
         relevance:
           type: number
           nullable: true
@@ -3139,8 +3244,8 @@ components:
         imageReference:
           type: string
           nullable: true
-          format: uri
-          description: Short-lived authorized image URL for READY record media.
+          format: uri-reference
+          description: Public relative curated-catalogue image path or short-lived authorized URL for READY record media.
         visibility:
           type: string
           enum:
@@ -3200,14 +3305,6 @@ components:
           description: When false, use only referenceIds for this message, including no references when the list is empty. When true or omitted, an empty referenceIds value inherits all active references previously shared with the session for backward compatibility.
           type: boolean
           default: true
-        route:
-          type: string
-          nullable: true
-          enum:
-            - SEARCH
-            - SUMMARY
-            - COMPARE
-            - NAVIGATION
     ShareChatReferenceRequest:
       type: object
       required:
@@ -3346,15 +3443,6 @@ components:
         content:
           type: string
           maxLength: 12000
-        route:
-          type: string
-          nullable: true
-          enum:
-            - SEARCH
-            - SUMMARY
-            - COMPARE
-            - NAVIGATION
-            - OUT_OF_SCOPE
         responseStatus:
           type: string
           nullable: true
@@ -3916,7 +4004,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '422':
-          description: Chat route is unsupported by the bounded Chat workflow.
+          description: Chat message request failed schema validation.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/CorrelationId'
@@ -4030,6 +4118,201 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /cooking-plans/{planId}/saved:
+    put:
+      tags:
+        - Cooking Plans
+      operationId: saveCookingPlan
+      summary: Add an owned READY plan to Saved.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Persisted saved state and current execution progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanExecutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Cooking Plans
+      operationId: removeSavedCookingPlan
+      summary: Remove an owned plan from Saved without deleting its immutable history.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: resetProgress
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Plan removed from Saved; progress is retained unless resetProgress is true.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanExecutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}/execution:
+    get:
+      tags:
+        - Cooking Plans
+      operationId: getCookingPlanExecution
+      summary: Read account-synchronised saved state and execution progress.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current execution snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanExecutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Cooking Plans
+      operationId: updateCookingPlanExecution
+      summary: Advance one execution step with optimistic concurrency.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CookingPlanExecutionUpdateRequest'
+      responses:
+        '200':
+          description: Updated execution snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanExecutionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}/execution/reset:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: resetCookingPlanExecution
+      summary: Reset all unfinished execution progress.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: expectedVersion
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+      responses:
+        '200':
+          description: Empty execution snapshot at the next version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanExecutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cooking-plans/{planId}/finish:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: finishCookingPlan
+      summary: Finish a cooking plan and consume its allocated inventory.
+      description: Owner-only, idempotent completion of a READY plan. Inventory deductions, automatic archival of depleted lots, and finishedAt persistence are atomic; a conflicting inventory change returns 409 without partial deductions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Persisted finished plan. Repeated requests return the same completed result without consuming inventory again.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /cooking-plans/{planId}/decisions:
     post:
       tags:
@@ -4158,13 +4441,34 @@ paths:
                 $ref: '#/components/schemas/CookingPlanHistoryResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /cooking-plans/saved:
+    get:
+      tags:
+        - Cooking Plans
+      operationId: listSavedCookingPlans
+      summary: List explicitly saved cooking plans for the authenticated user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Saved cooking plan page, newest save first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /cooking-plans/generate-async:
     post:
       tags:
         - Cooking Plans
       operationId: generateCookingPlanAsync
       summary: Submit an async cooking-plan generation task.
-      description: Requires Idempotency-Key. Accepts the same request as /generate and returns 202 with a task handle; the background coordinator polls the agent task and materialises the terminal plan. If the submission itself fails, a terminal FAILED plan is returned with 200.
+      description: Requires Idempotency-Key. An equivalent prior READY schedule is returned immediately with 200 after current inventory validation; otherwise returns 202 with a task handle and the background coordinator materialises the terminal plan. If submission itself fails, a terminal FAILED plan is returned with 200.
       security:
         - bearerAuth: []
       parameters:
@@ -4192,7 +4496,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CookingPlanAsyncAcceptedResponse'
         '200':
-          description: Terminal FAILED plan returned because the task submission itself failed.
+          description: Reused READY plan, or terminal FAILED plan when task submission itself failed.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/CorrelationId'
@@ -4330,7 +4634,8 @@ paths:
       tags:
         - Inventory
       operationId: createInventoryLot
-      summary: Add a real inventory lot.
+      summary: Add real inventory or merge it into an existing ingredient entry.
+      description: Ingredient names are matched after trimming and without case sensitivity. A matching active entry with the same unit is incremented instead of creating a duplicate; incompatible units return 409.
       security:
         - bearerAuth: []
       parameters:
@@ -4343,7 +4648,7 @@ paths:
               $ref: '#/components/schemas/InventoryLotRequest'
       responses:
         '201':
-          description: Inventory lot created.
+          description: Inventory entry created or merged; the response identifies the active entry.
           headers:
             ETag:
               description: Current lot version.
@@ -4356,6 +4661,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /inventory/lots/{lotId}:
     get:
       tags:
@@ -5933,6 +6240,36 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /catalogue-images/{sourceId}:
+    get:
+      tags:
+        - Catalogue
+      summary: Read a public curated catalogue image.
+      description: Returns only bundled non-sensitive artwork for a mapped curated catalogue item. The response is never cached so both clients observe an updated registry immediately.
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 21000000-0000-4000-8000-000000000001
+      responses:
+        '200':
+          description: Curated JPEG artwork.
+          headers:
+            Cache-Control:
+              description: Always no-store for this small server-owned registry.
+              schema:
+                type: string
+                example: no-store
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
   /catalogue/reference-data:
     get:
       tags:
@@ -6260,6 +6597,36 @@ paths:
       responses:
         '200':
           description: Replaced preference aggregate.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferencesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/me/preferences/cooking-region:
+    put:
+      tags:
+        - User Preferences
+      summary: Update only the authenticated user's cooking guidance region.
+      description: Preserves the rest of the preference aggregate so a focused client setting cannot overwrite dietary or recommendation preferences.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCookingRegionRequest'
+      responses:
+        '200':
+          description: Updated cooking region and current preference aggregate.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/CorrelationId'
