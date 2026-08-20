@@ -175,6 +175,7 @@ describe('cook mode selection page', () => {
         expect(request.headers.get('idempotency-key')).toMatch(/[0-9a-f-]{36}/)
         return HttpResponse.json({ planId, taskId, status: 'PROCESSING', location: `/api/v1/cooking-plans/${planId}/task` }, { status: 202 })
       }),
+      http.get(`${origin}/api/v1/cooking-plans/${planId}/task`, () => HttpResponse.json({ code: 'NOT_FOUND', message: 'Task completed' }, { status: 404 })),
       http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json({ planId, status: 'READY', createdAt: '2026-08-02T10:00:00Z', completedAt: '2026-08-02T10:02:00Z', explanation: 'Done', timeline: [] })),
     )
 
