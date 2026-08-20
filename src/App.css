@@ -6633,6 +6633,15 @@ button.recipe-card.selected {
   font-size: 8px;
 }
 
+.cooking-progress-card .finish-plan-action {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+.cooking-finished-card .primary-action {
+  margin-top: 16px;
+}
+
 .generation-progress {
   grid-template-columns: minmax(0, 1fr) auto;
 }

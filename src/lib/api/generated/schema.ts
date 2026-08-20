@@ -585,6 +585,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cooking-plans/{planId}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a cooking plan and consume its allocated inventory.
+         * @description Owner-only, idempotent completion of a READY plan. Inventory deductions and finishedAt persistence are atomic; a conflicting inventory change returns 409 without partial deductions.
+         */
+        post: operations["finishCookingPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cooking-plans/{planId}/decisions": {
         parameters: {
             query?: never;
@@ -656,7 +676,7 @@ export interface paths {
         put?: never;
         /**
          * Submit an async cooking-plan generation task.
-         * @description Requires Idempotency-Key. Accepts the same request as /generate and returns 202 with a task handle; the background coordinator polls the agent task and materialises the terminal plan. If the submission itself fails, a terminal FAILED plan is returned with 200.
+         * @description Requires Idempotency-Key. An equivalent prior READY schedule is returned immediately with 200 after current inventory validation; otherwise returns 202 with a task handle and the background coordinator materialises the terminal plan. If submission itself fails, a terminal FAILED plan is returned with 200.
          */
         post: operations["generateCookingPlanAsync"];
         delete?: never;
@@ -4289,8 +4309,21 @@ export interface components {
             region?: string | null;
             /** Format: date-time */
             createdAt?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When Agent generation reached a terminal state.
+             */
             completedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the user finished every cooking step and inventory was atomically consumed.
+             */
+            finishedAt?: string | null;
+            /**
+             * Format: uuid
+             * @description Previous equivalent READY plan whose schedule was reused after current inventory validation.
+             */
+            reusedFromPlanId?: string | null;
             /** @example OPTIMAL */
             solverStatus?: string | null;
             /** @example 54 */
@@ -5032,6 +5065,38 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    finishCookingPlan: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted finished plan. Repeated requests return the same completed result without consuming inventory again. */
+            200: {
+                headers: {
+                    "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     submitCookingPlanDecisions: {
         parameters: {
             query?: never;
@@ -5169,7 +5234,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Terminal FAILED plan returned because the task submission itself failed. */
+            /** @description Reused READY plan, or terminal FAILED plan when task submission itself failed. */
             200: {
                 headers: {
                     "X-Correlation-ID": components["headers"]["CorrelationId"];
