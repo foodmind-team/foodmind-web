@@ -362,6 +362,7 @@ function useRecord(type: string, id: string) {
 
 export function RecordDetailPage() {
   const { recordType = 'food', id = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -386,9 +387,12 @@ export function RecordDetailPage() {
   const title = 'mealNameSnapshot' in data ? data.mealNameSnapshot : data.drinkName
   const place = 'mealNameSnapshot' in data ? data.placeNameSnapshot : data.shopNameSnapshot
   const repeat = 'mealNameSnapshot' in data ? data.wouldEatAgain : data.wouldBuyAgain
+  const fromGroup = searchParams.get('fromGroup')
+  const backPath = fromGroup ? `/groups/${encodeURIComponent(fromGroup)}` : '/history'
+  const backLabel = fromGroup ? 'Back to group' : 'History'
   return (
     <div className="page section-page narrow-page">
-      <Link className="back-link" to="/history"><ArrowLeft size={16} /> History</Link>
+      <Link className="back-link" to={backPath}><ArrowLeft size={16} /> {backLabel}</Link>
       <header className="record-hero">
         <span className={`record-hero-icon ${type}`}>{type === 'food' ? <Utensils /> : <Coffee />}</span>
         <div><p className="eyebrow">{sentenceCase(type)} · {sentenceCase(data.visibility)}</p><h1>{title}</h1><p>{place || 'No place recorded'} · {formatDateTime(data.occurredAt)}</p></div>

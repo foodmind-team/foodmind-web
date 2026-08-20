@@ -12,13 +12,16 @@ const origin = 'http://localhost:3000'
 const recordId = '00000000-0000-4000-8000-000000000081'
 const assetId = '00000000-0000-4000-8000-000000000082'
 
-function renderDetail() {
+function renderDetail(search = '') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <MemoryRouter initialEntries={[`/records/food/${recordId}`]}>
-          <Routes><Route path="/records/:recordType/:id" element={<RecordDetailPage />} /></Routes>
+        <MemoryRouter initialEntries={[`/records/food/${recordId}${search}`]}>
+          <Routes>
+            <Route path="/records/:recordType/:id" element={<RecordDetailPage />} />
+            <Route path="/groups/:groupId" element={<div>Group workspace opened</div>} />
+          </Routes>
         </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
@@ -71,6 +74,32 @@ describe('record detail image', () => {
 
     expect(await screen.findByText('Image unavailable')).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: 'Uploaded image for Laksa' })).not.toBeInTheDocument()
+  })
+})
+
+describe('record detail navigation', () => {
+  it('returns to the originating trusted group', async () => {
+    server.use(http.get(`${origin}/api/v1/food-records/${recordId}`, () => HttpResponse.json({
+      id: recordId,
+      mealNameSnapshot: 'Laksa',
+      occurredAt: '2026-08-01T12:00:00Z',
+      price: null,
+      rating: 4,
+      comment: null,
+      wouldEatAgain: true,
+      visibility: 'GROUP',
+      groupId: 'group-1',
+      createdAt: '2026-08-01T12:00:00Z',
+      updatedAt: '2026-08-01T12:00:00Z',
+      version: 0,
+    })))
+
+    renderDetail('?fromGroup=group-1')
+
+    const backLink = await screen.findByRole('link', { name: 'Back to group' })
+    expect(backLink).toHaveAttribute('href', '/groups/group-1')
+    await userEvent.click(backLink)
+    expect(await screen.findByText('Group workspace opened')).toBeInTheDocument()
   })
 })
 
