@@ -247,10 +247,26 @@ export function CookingDetailPage() {
       </div>
     )
   }
+  if (data.status === 'READY' && data.finishedAt) return <FinishedPlanResult data={data} />
   return <ReadyPlanBoard data={data} />
 }
 
+function FinishedPlanResult({ data }: { data: Schema<'CookingPlanResponse'> }) {
+  return (
+    <div className="page section-page cooking-result-page">
+      <header className="section-page-heading"><div><p className="eyebrow">Plan finished · {formatDateTime(data.finishedAt)}</p><h1>Cooking complete</h1><p>Your allocated ingredients have been deducted from inventory.</p></div><span className="cooking-mark"><Check /></span></header>
+      <section className="detail-card cooking-finished-card">
+        <p className="eyebrow">Completed result</p>
+        <h2>{data.sources?.length || 0} {data.sources?.length === 1 ? 'dish' : 'dishes'} · {data.timeline?.length || 0} cooking steps</h2>
+        <p>{data.makespanMinutes != null ? `${data.makespanMinutes} minute planned cook` : 'Cooking plan completed'}{data.reusedFromPlanId ? ' · reused from your previous equivalent plan' : ''}.</p>
+        <Link className="primary-action" to="/"><ArrowLeft size={16} /> Back to Home</Link>
+      </section>
+    </div>
+  )
+}
+
 function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
+  const queryClient = useQueryClient()
   const { showToast } = useToast()
   const tasks = useMemo(
     () => buildExecutionTimeline(data.timeline || [], data.miseEnPlace || []),
@@ -272,6 +288,7 @@ function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
   const total = tasks.length
   const done = snapshot.completed.length
   const percent = total ? Math.round(done / total * 100) : 0
+  const allStepsComplete = total > 0 && done === total
   const gatherTask = tasks.find((task) => /gather|collect|set out.+ingredients/i.test(task.instruction || '')) || tasks[0]
   const ingredientsToGather = (data.completionChecklist || []).map((item, index) => ({
     key: item.completionItemId || `${item.ingredientName}-${index}`,
@@ -300,13 +317,26 @@ function ReadyPlanBoard({ data }: { data: Schema<'CookingPlanResponse'> }) {
     }
   }
 
+  const finish = useMutation({
+    mutationFn: async () => dataOrThrow<Schema<'CookingPlanResponse'>>(await api.POST('/cooking-plans/{planId}/finish', { params: { path: { planId: data.planId } } })),
+    onSuccess: (finished) => {
+      clearExecutionProgress(data.planId)
+      queryClient.setQueryData(queryKeys.cooking.detail(data.planId), finished)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cooking.history() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() })
+    },
+  })
+
   return (
     <div className="page section-page cooking-result-page">
       <Link className="back-link" to="/cooking"><ArrowLeft size={16} /> Cooking</Link>
       <header className="section-page-heading"><div><p className="eyebrow">{sentenceCase(data.status)} · {formatDateTime(data.completedAt)}</p><h1>Your FoodMind cooking plan</h1><p>{data.explanation || `${tasks.length} ordered tasks across the dishes you picked.`}</p></div><span className="cooking-mark"><ChefHat /></span></header>
       {data.solverStatus && <p className="field-note">Solver {sentenceCase(data.solverStatus)}{data.makespanMinutes != null ? ` · ${data.makespanMinutes} minute makespan` : ''}{data.region ? ` · region ${data.region}` : ''}</p>}
+      {data.reusedFromPlanId && <p className="field-note">Reused from your previous equivalent plan.</p>}
 
-      <section className="cooking-progress-card"><div><p className="eyebrow">Execution progress</p><h2>{done} of {total} tasks complete</h2></div><strong>{percent}%</strong><div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan completion" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}><span style={{ width: `${percent}%` }} /></div>{done > 0 && <button className="text-button" type="button" onClick={() => { clearExecutionProgress(data.planId); setExecStates(initExecutionStates(tasks)); setExecEventId(0) }}>Reset progress</button>}<small>Progress is saved on this device. Inventory changes only after you explicitly complete a shopping list.</small></section>
+      <section className="cooking-progress-card"><div><p className="eyebrow">Execution progress</p><h2>{done} of {total} tasks complete</h2></div><strong>{percent}%</strong><div className="cooking-progress-track" role="progressbar" aria-label="Cooking plan completion" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}><span style={{ width: `${percent}%` }} /></div>{done > 0 && !allStepsComplete && <button className="text-button" type="button" onClick={() => { clearExecutionProgress(data.planId); setExecStates(initExecutionStates(tasks)); setExecEventId(0) }}>Reset progress</button>}<small>Progress is saved on this device. Inventory is deducted when you finish the plan.</small><button className="primary-action finish-plan-action" type="button" disabled={!allStepsComplete || finish.isPending} onClick={() => finish.mutate()}><Check size={16} /> {finish.isPending ? 'Finishing plan…' : 'Finish plan'}</button></section>
+
+      {finish.isError && <div className="form-alert" role="alert">{errorMessage(finish.error)}</div>}
 
       <div className="execution-lanes">
         {snapshot.inProgress.length > 0 && <ExecutionLane title="In progress" tone="progress" tasks={snapshot.inProgress} supplement={taskSupplement} action={(task) => <button className="lane-action" type="button" onClick={() => submit(task.taskId || '', 'COMPLETED')}><Check size={15} /> Complete</button>} />}

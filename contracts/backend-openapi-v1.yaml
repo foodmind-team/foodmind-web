@@ -2166,6 +2166,17 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: When Agent generation reached a terminal state.
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user finished every cooking step and inventory was atomically consumed.
+        reusedFromPlanId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Previous equivalent READY plan whose schedule was reused after current inventory validation.
         solverStatus:
           type: string
           nullable: true
@@ -4051,6 +4062,39 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /cooking-plans/{planId}/finish:
+    post:
+      tags:
+        - Cooking Plans
+      operationId: finishCookingPlan
+      summary: Finish a cooking plan and consume its allocated inventory.
+      description: Owner-only, idempotent completion of a READY plan. Inventory deductions and finishedAt persistence are atomic; a conflicting inventory change returns 409 without partial deductions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Persisted finished plan. Repeated requests return the same completed result without consuming inventory again.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CookingPlanResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /cooking-plans/{planId}/decisions:
     post:
       tags:
@@ -4185,7 +4229,7 @@ paths:
         - Cooking Plans
       operationId: generateCookingPlanAsync
       summary: Submit an async cooking-plan generation task.
-      description: Requires Idempotency-Key. Accepts the same request as /generate and returns 202 with a task handle; the background coordinator polls the agent task and materialises the terminal plan. If the submission itself fails, a terminal FAILED plan is returned with 200.
+      description: Requires Idempotency-Key. An equivalent prior READY schedule is returned immediately with 200 after current inventory validation; otherwise returns 202 with a task handle and the background coordinator materialises the terminal plan. If submission itself fails, a terminal FAILED plan is returned with 200.
       security:
         - bearerAuth: []
       parameters:
@@ -4213,7 +4257,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CookingPlanAsyncAcceptedResponse'
         '200':
-          description: Terminal FAILED plan returned because the task submission itself failed.
+          description: Reused READY plan, or terminal FAILED plan when task submission itself failed.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/CorrelationId'

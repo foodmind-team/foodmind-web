@@ -134,10 +134,11 @@ const confirmationPlan = {
 function renderCookingRoutes(initialEntry = `/cooking?selected=${recipeOneId},${recipeTwoId}`) {
   server.use(http.get(`${origin}/api/v1/recipes`, () => HttpResponse.json(recipePage)))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/settings" element={<CookingSettingsPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter initialEntries={[initialEntry]}><Routes><Route path="/" element={<h1>Home</h1>} /><Route path="/cooking" element={<CookingSelectPage />} /><Route path="/cooking/settings" element={<CookingSettingsPage />} /><Route path="/cooking/:planId" element={<CookingDetailPage />} /><Route path="/shopping-lists/:shoppingListId" element={<h1>Shopping list</h1>} /></Routes></MemoryRouter></ToastProvider></QueryClientProvider>)
 }
 
 beforeEach(() => {
+  localStorage.clear()
   server.use(
     http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(accountPreferences)),
   )
@@ -186,6 +187,23 @@ describe('cook mode selection page', () => {
     expect(button).toBeDisabled()
     await user.click(button)
     expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('opens an equivalent READY plan returned immediately by automatic reuse', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.post(`${origin}/api/v1/cooking-plans/generate-async`, () => HttpResponse.json({
+        ...readyPlan,
+        reusedFromPlanId: '00000000-0000-4000-8000-000000000041',
+      })),
+    )
+
+    renderCookingRoutes()
+    expect(await screen.findByText('Scrambled Eggs with Tomato')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /generate plan/i }))
+
+    expect(await screen.findByRole('heading', { name: 'Your FoodMind cooking plan' })).toBeInTheDocument()
+    expect(screen.getByText('Reused from your previous equivalent plan.')).toBeInTheDocument()
   })
 })
 
@@ -355,6 +373,39 @@ describe('cooking execution progress', () => {
 
     renderCookingRoutes(`/cooking/${planId}`)
     expect(await screen.findByRole('heading', { name: '1 of 3 tasks complete' })).toBeInTheDocument()
+  })
+
+  it('enables finish only after every step, then shows the persisted result and home action', async () => {
+    const user = userEvent.setup()
+    let finishCalls = 0
+    server.use(
+      http.get(`${origin}/api/v1/cooking-plans/${planId}`, () => HttpResponse.json(readyPlan)),
+      http.post(`${origin}/api/v1/cooking-plans/${planId}/finish`, () => {
+        finishCalls += 1
+        return HttpResponse.json({
+          ...readyPlan,
+          finishedAt: '2026-08-02T11:00:00Z',
+          reusedFromPlanId: '00000000-0000-4000-8000-000000000041',
+        })
+      }),
+    )
+
+    renderCookingRoutes(`/cooking/${planId}`)
+
+    const finish = await screen.findByRole('button', { name: 'Finish plan' })
+    expect(finish).toBeDisabled()
+    for (let step = 0; step < 3; step += 1) {
+      await user.click(screen.getByRole('button', { name: 'Start' }))
+      await user.click(screen.getByRole('button', { name: 'Complete' }))
+    }
+    expect(finish).toBeEnabled()
+    await user.click(finish)
+
+    expect(await screen.findByRole('heading', { name: 'Cooking complete' })).toBeInTheDocument()
+    expect(screen.getByText(/reused from your previous equivalent plan/i)).toBeInTheDocument()
+    expect(finishCalls).toBe(1)
+    await user.click(screen.getByRole('link', { name: 'Back to Home' }))
+    expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument()
   })
 })
 
