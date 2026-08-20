@@ -3305,14 +3305,6 @@ components:
           description: When false, use only referenceIds for this message, including no references when the list is empty. When true or omitted, an empty referenceIds value inherits all active references previously shared with the session for backward compatibility.
           type: boolean
           default: true
-        route:
-          type: string
-          nullable: true
-          enum:
-            - SEARCH
-            - SUMMARY
-            - COMPARE
-            - NAVIGATION
     ShareChatReferenceRequest:
       type: object
       required:
@@ -3451,15 +3443,6 @@ components:
         content:
           type: string
           maxLength: 12000
-        route:
-          type: string
-          nullable: true
-          enum:
-            - SEARCH
-            - SUMMARY
-            - COMPARE
-            - NAVIGATION
-            - OUT_OF_SCOPE
         responseStatus:
           type: string
           nullable: true
@@ -4021,7 +4004,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '422':
-          description: Chat route is unsupported by the bounded Chat workflow.
+          description: Chat message request failed schema validation.
           headers:
             X-Correlation-ID:
               $ref: '#/components/headers/CorrelationId'

@@ -11,6 +11,7 @@ import { requestCurrentLocation, type CurrentCoordinates } from '../lib/current-
 import { queryKeys } from '../lib/api/query-keys'
 import { formatDateTime, sentenceCase } from '../lib/format'
 import { localMonday } from '../lib/local-date'
+import { parsePreferenceCodes } from '../lib/preference-codes'
 
 function currentMonday() {
   return localMonday(new Date())
@@ -65,44 +66,43 @@ type PreferenceForm = {
   currency: string
   spiceTolerance: string
   maxDistanceKm: string
-  cleanlinessPriority: string
-  minimumCleanlinessEvidenceScore: string
-  foodGoal: string
   drinkSweetnessPreference: string
   drinkIcePreference: string
   likedCuisineCodes: string[]
   dislikedCuisineCodes: string[]
-  dietaryTagCodes: string[]
+  dietaryTagCodes: string
+  allergenCodes: string
   preferredMealTypes: string[]
 }
 
 const stringNumber = (value: string) => value.trim() ? Number(value) : undefined
+
 
 export function PreferencesPage() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const preferences = useQuery({ queryKey: queryKeys.users.preferences(), queryFn: async () => dataOrThrow<Schema<'UserPreferencesResponse'>>(await api.GET('/users/me/preferences')) })
   const reference = useQuery({ queryKey: queryKeys.catalogue.reference(), staleTime: Infinity, queryFn: async () => dataOrThrow<Schema<'CatalogueReferenceDataResponse'>>(await api.GET('/catalogue/reference-data')) })
-  const [allergenCodes, setAllergenCodes] = useState<string[]>([])
-  const [allergenSeverity, setAllergenSeverity] = useState<Record<string, string>>({})
   const [coordinates, setCoordinates] = useState<CurrentCoordinates | null>(null)
   const [locationMessage, setLocationMessage] = useState('No default location saved. Distance filtering is off.')
   const [locationError, setLocationError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
-  const { register, handleSubmit, reset, setError, setValue, formState: { errors, isSubmitting } } = useForm<PreferenceForm>()
+  const { register, handleSubmit, reset, setError, setValue, watch, formState: { errors, isSubmitting } } = useForm<PreferenceForm>({
+    defaultValues: { likedCuisineCodes: [], dislikedCuisineCodes: [] },
+  })
+  const likedCuisineCodes = watch('likedCuisineCodes') || []
+  const dislikedCuisineCodes = watch('dislikedCuisineCodes') || []
 
   useEffect(() => {
     if (!preferences.data) return
     const data = preferences.data
-    reset({ budgetMin: data.budgetMin?.toString() || '', budgetMax: data.budgetMax?.toString() || '', currency: data.currency || 'SGD', spiceTolerance: data.spiceTolerance?.toString() || '', maxDistanceKm: data.maxDistanceKm?.toString() || '', cleanlinessPriority: data.cleanlinessPriority?.toString() || '0', minimumCleanlinessEvidenceScore: data.minimumCleanlinessEvidenceScore?.toString() || '', foodGoal: data.foodGoal || '', drinkSweetnessPreference: data.drinkSweetnessPreference || '', drinkIcePreference: data.drinkIcePreference || '', likedCuisineCodes: data.likedCuisineCodes || [], dislikedCuisineCodes: data.dislikedCuisineCodes || [], dietaryTagCodes: data.dietaryTagCodes || [], preferredMealTypes: data.preferredMealTypes || [] })
+    reset({ budgetMin: data.budgetMin?.toString() || '', budgetMax: data.budgetMax?.toString() || '', currency: data.currency || 'SGD', spiceTolerance: data.spiceTolerance?.toString() || '', maxDistanceKm: data.maxDistanceKm?.toString() || '', drinkSweetnessPreference: data.drinkSweetnessPreference || '', drinkIcePreference: data.drinkIcePreference || '', likedCuisineCodes: data.likedCuisineCodes || [], dislikedCuisineCodes: data.dislikedCuisineCodes || [], dietaryTagCodes: (data.dietaryTagCodes || []).join(', '), allergenCodes: data.allergens.map((item) => item.code).join(', '), preferredMealTypes: data.preferredMealTypes || [] })
     const savedCoordinates = data.preferredLatitude != null && data.preferredLongitude != null
       ? { latitude: data.preferredLatitude, longitude: data.preferredLongitude }
       : null
     setCoordinates(savedCoordinates)
     setLocationMessage(savedCoordinates ? 'Saved default location is ready.' : 'No default location saved. Distance filtering is off.')
     setLocationError(null)
-    setAllergenCodes(data.allergens.map((item) => item.code))
-    setAllergenSeverity(Object.fromEntries(data.allergens.map((item) => [item.code, item.severity])))
   }, [preferences.data, reset])
 
   const update = useMutation({
@@ -111,12 +111,16 @@ export function PreferencesPage() {
   })
   const submit = handleSubmit(async (values) => {
     try {
-      await update.mutateAsync({ budgetMin: stringNumber(values.budgetMin), budgetMax: stringNumber(values.budgetMax), currency: values.currency.toUpperCase(), spiceTolerance: stringNumber(values.spiceTolerance), preferredArea: undefined, preferredLatitude: coordinates?.latitude, preferredLongitude: coordinates?.longitude, maxDistanceKm: coordinates ? stringNumber(values.maxDistanceKm) : undefined, cleanlinessPriority: stringNumber(values.cleanlinessPriority), minimumCleanlinessEvidenceScore: stringNumber(values.minimumCleanlinessEvidenceScore), foodGoal: values.foodGoal || undefined, drinkSweetnessPreference: values.drinkSweetnessPreference || undefined, drinkIcePreference: values.drinkIcePreference || undefined, cookingRegion: preferences.data?.cookingRegion, likedCuisineCodes: values.likedCuisineCodes, dislikedCuisineCodes: values.dislikedCuisineCodes, dietaryTagCodes: values.dietaryTagCodes, preferredMealTypes: values.preferredMealTypes, allergens: allergenCodes.map((code) => ({ code, severity: allergenSeverity[code] || 'MODERATE' })) })
+      const liked = values.likedCuisineCodes || []
+      const disliked = (values.dislikedCuisineCodes || []).filter((code) => !liked.includes(code))
+      const existingAllergenSeverity = Object.fromEntries((preferences.data?.allergens || []).map((item) => [item.code, item.severity]))
+      await update.mutateAsync({ budgetMin: stringNumber(values.budgetMin), budgetMax: stringNumber(values.budgetMax), currency: values.currency.toUpperCase(), spiceTolerance: stringNumber(values.spiceTolerance), preferredArea: undefined, preferredLatitude: coordinates?.latitude, preferredLongitude: coordinates?.longitude, maxDistanceKm: coordinates ? stringNumber(values.maxDistanceKm) : undefined, drinkSweetnessPreference: values.drinkSweetnessPreference || undefined, drinkIcePreference: values.drinkIcePreference || undefined, cookingRegion: preferences.data?.cookingRegion, likedCuisineCodes: liked, dislikedCuisineCodes: disliked, dietaryTagCodes: parsePreferenceCodes(values.dietaryTagCodes), preferredMealTypes: values.preferredMealTypes, allergens: parsePreferenceCodes(values.allergenCodes).map((code) => ({ code, severity: existingAllergenSeverity[code] || 'MODERATE' })) })
     } catch (error) {
       let focused = false
       if (error instanceof ApiError) error.fieldErrors.forEach((field) => {
         if (field.field === 'allergens') {
-          setError('root', { message: field.message })
+          setError('allergenCodes', { message: field.message }, { shouldFocus: !focused })
+          focused = true
         } else if (field.field in values) {
           setError(field.field as keyof PreferenceForm, { message: field.message }, { shouldFocus: !focused })
           focused = true
@@ -125,7 +129,6 @@ export function PreferencesPage() {
       if (!focused && !(error instanceof ApiError && error.fieldErrors.length)) setError('root', { message: errorMessage(error) })
     }
   })
-  const toggleAllergen = (code: string, checked: boolean) => setAllergenCodes((current) => checked ? [...new Set([...current, code])] : current.filter((item) => item !== code))
   const locate = async () => {
     setLocating(true)
     setLocationError(null)
@@ -144,20 +147,29 @@ export function PreferencesPage() {
     setLocationMessage('No default location saved. Distance filtering is off.')
     setLocationError(null)
   }
+  const toggleCuisine = (field: 'likedCuisineCodes' | 'dislikedCuisineCodes', code: string, checked: boolean) => {
+    const selected = field === 'likedCuisineCodes' ? likedCuisineCodes : dislikedCuisineCodes
+    const oppositeField = field === 'likedCuisineCodes' ? 'dislikedCuisineCodes' : 'likedCuisineCodes'
+    const opposite = field === 'likedCuisineCodes' ? dislikedCuisineCodes : likedCuisineCodes
+    setValue(field, checked ? [...new Set([...selected, code])] : selected.filter((item) => item !== code), { shouldDirty: true })
+    if (checked) setValue(oppositeField, opposite.filter((item) => item !== code), { shouldDirty: true })
+  }
 
   if (preferences.isLoading || reference.isLoading) return <div className="page"><LoadingState label="Loading your preferences…" /></div>
   if (preferences.isError || reference.isError) return <div className="page"><ErrorState error={preferences.error || reference.error} onRetry={() => { void preferences.refetch(); void reference.refetch() }} /></div>
   return (
     <div className="page section-page narrow-page preferences-page">
-      <header className="section-page-heading"><div><p className="eyebrow">Your constraints and taste</p><h1>Preferences</h1><p>Hard requirements filter first. Soft preferences help FoodMind rank the remaining valid options.</p></div></header>
+      <header className="section-page-heading">
+        <div><p className="eyebrow">Your constraints and taste</p><h1>Preferences</h1><p>Hard requirements filter first. Soft preferences help FoodMind rank the remaining valid options.</p></div>
+      </header>
       <form className="card-form" onSubmit={submit}>
         <section>
-          <p className="eyebrow">Budget and distance</p><h2>Everyday context</h2>
+          <p className="eyebrow">Budget and distance</p>
+          <h2>Everyday context</h2>
           <div className="form-grid">
             <label>Minimum budget<input type="number" min="0" step="0.01" {...register('budgetMin')} /></label>
             <label>Maximum budget<input type="number" min="0" step="0.01" {...register('budgetMax')} /></label>
             <label>Currency<input maxLength={3} {...register('currency')} /></label>
-            <label>Food goal<input placeholder="e.g. BALANCED" {...register('foodGoal')} /></label>
           </div>
           <div className="current-location-card">
             <div className="current-location-copy"><p className="eyebrow">Default location</p><h3>Use your current location</h3><p>FoodMind saves this starting point only when you save these preferences.</p></div>
@@ -173,25 +185,24 @@ export function PreferencesPage() {
 
         <section>
           <p className="eyebrow">Taste signals</p><h2>Cuisine and meal choices</h2>
-          <fieldset><legend>Liked cuisines</legend><div className="check-grid">{reference.data?.cuisines.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('likedCuisineCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
-          <fieldset><legend>Disliked cuisines</legend><div className="check-grid">{reference.data?.cuisines.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('dislikedCuisineCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
+          <fieldset><legend>Liked cuisines</legend><div className="check-grid">{reference.data?.cuisines.map((item) => <label className="check-control" key={item.code}><input type="checkbox" checked={likedCuisineCodes.includes(item.code)} onChange={(event) => toggleCuisine('likedCuisineCodes', item.code, event.target.checked)} /><span>{item.name}</span></label>)}</div></fieldset>
+          <fieldset><legend>Disliked cuisines</legend><div className="check-grid">{reference.data?.cuisines.map((item) => <label className="check-control" key={item.code}><input type="checkbox" checked={dislikedCuisineCodes.includes(item.code)} onChange={(event) => toggleCuisine('dislikedCuisineCodes', item.code, event.target.checked)} /><span>{item.name}</span></label>)}</div></fieldset>
           <fieldset><legend>Preferred meal types</legend><div className="check-grid">{reference.data?.mealTypes.map((item) => <label className="check-control" key={item}><input type="checkbox" value={item} {...register('preferredMealTypes')} /><span>{sentenceCase(item)}</span></label>)}</div></fieldset>
           <div className="form-grid"><label>Spice tolerance<select {...register('spiceTolerance')}><option value="">Not specified</option>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select></label><label>Drink sweetness<input {...register('drinkSweetnessPreference')} placeholder="e.g. LOW" /></label><label>Drink ice<input {...register('drinkIcePreference')} placeholder="e.g. LESS" /></label></div>
         </section>
 
         <section>
           <p className="eyebrow">Hard constraints</p><h2>Dietary and allergen needs</h2>
-          <fieldset><legend>Required dietary tags</legend><div className="check-grid">{reference.data?.dietaryTags.map((item) => <label className="check-control" key={item.code}><input type="checkbox" value={item.code} {...register('dietaryTagCodes')} /><span>{item.name}</span></label>)}</div></fieldset>
-          <fieldset><legend>Allergens</legend><div className="allergen-grid">{reference.data?.allergens.map((item) => <div className="allergen-row" key={item.code}><label className="check-control"><input type="checkbox" checked={allergenCodes.includes(item.code)} onChange={(event) => toggleAllergen(item.code, event.target.checked)} /><span>{item.name}</span></label>{allergenCodes.includes(item.code) && <select aria-label={`${item.name} severity`} value={allergenSeverity[item.code] || 'MODERATE'} onChange={(event) => setAllergenSeverity((current) => ({ ...current, [item.code]: event.target.value }))}><option value="MILD">Mild</option><option value="MODERATE">Moderate</option><option value="SEVERE">Severe</option></select>}</div>)}</div></fieldset>
+          <div className="form-grid">
+            <label>Required dietary tags<input {...register('dietaryTagCodes')} placeholder="e.g. VEGAN, VEGETARIAN" /><small>Separate multiple values with commas.</small></label>
+            <label>Allergens<input {...register('allergenCodes')} placeholder="e.g. PEANUT, SHELLFISH" /><small>Separate multiple values with commas.</small></label>
+          </div>
         </section>
-
-        <section>
-          <p className="eyebrow">Cleanliness evidence</p><h2>Decision-support, not a safety guarantee</h2><p>FoodMind organises available hygiene-related observations and applies your priorities as decision-support signals. It does not inspect or certify kitchens.</p>
-          <div className="form-grid"><label>Priority<select {...register('cleanlinessPriority')}>{[0, 1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}</select></label><label>Minimum evidence score<select {...register('minimumCleanlinessEvidenceScore')}><option value="">No threshold</option><option value="0.6">0.6</option><option value="0.8">0.8</option><option value="0.9">0.9</option></select></label></div>
-        </section>
-
         {(errors.root?.message || update.isError) && <div className="form-alert" role="alert">{errors.root?.message || errorMessage(update.error)}</div>}
-        <div className="form-actions sticky-form-actions"><Link className="secondary-action" to="/me">Cancel</Link><button className="primary-action" type="submit" disabled={isSubmitting || update.isPending}>{update.isPending ? 'Saving…' : <><Check size={17} /> Save preferences</>}</button></div>
+        <div className="form-actions sticky-form-actions">
+          <Link className="secondary-action" to="/me">Cancel</Link>
+          <button className="primary-action" type="submit" disabled={isSubmitting || update.isPending}>{update.isPending ? 'Saving…' : <><Check size={17} /> Save preferences</>}</button>
+        </div>
       </form>
     </div>
   )

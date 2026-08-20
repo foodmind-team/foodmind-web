@@ -527,7 +527,7 @@ export interface paths {
                 401: components["responses"]["Unauthorized"];
                 404: components["responses"]["NotFound"];
                 409: components["responses"]["Conflict"];
-                /** @description Chat route is unsupported by the bounded Chat workflow. */
+                /** @description Chat message request failed schema validation. */
                 422: {
                     headers: {
                         "X-Correlation-ID": components["headers"]["CorrelationId"];
@@ -4870,8 +4870,6 @@ export interface components {
              * @default true
              */
             useSessionReferences: boolean;
-            /** @enum {string|null} */
-            route?: "SEARCH" | "SUMMARY" | "COMPARE" | "NAVIGATION" | null;
         };
         ShareChatReferenceRequest: {
             /** @enum {string} */
@@ -4926,8 +4924,6 @@ export interface components {
             /** @enum {string} */
             role: "USER" | "ASSISTANT";
             content: string;
-            /** @enum {string|null} */
-            route?: "SEARCH" | "SUMMARY" | "COMPARE" | "NAVIGATION" | "OUT_OF_SCOPE" | null;
             /** @enum {string|null} */
             responseStatus?: "SUCCEEDED" | "FALLBACK_SUCCEEDED" | "UNSUPPORTED" | "FAILED" | null;
             /** Format: uuid */
