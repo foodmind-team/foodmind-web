@@ -64,7 +64,7 @@ describe('preferences form', () => {
     renderPreferences()
 
     expect(await screen.findByRole('heading', { name: 'Preferences', level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Spice tolerance' })).toHaveValue('3')
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Spice tolerance' })).toHaveValue('3'))
     await user.click(screen.getByRole('button', { name: 'Refresh from FoodMind' }))
 
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Spice tolerance' })).toHaveValue('4'))
