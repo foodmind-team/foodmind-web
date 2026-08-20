@@ -2550,6 +2550,64 @@ legend {
   padding-top: 2px;
 }
 
+.current-location-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 24px;
+  margin-top: 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: var(--green-50);
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.current-location-copy h3 {
+  margin: 4px 0 7px;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.current-location-copy p:last-child,
+.current-location-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.current-location-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.current-location-status,
+.current-location-card > label,
+.current-location-card > .form-alert {
+  grid-column: 1 / -1;
+}
+
+.current-location-card > .form-alert {
+  margin: 0;
+}
+
+.current-location-card label small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .current-location-card {
+    grid-template-columns: 1fr;
+  }
+
+  .current-location-actions {
+    justify-content: flex-start;
+  }
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -3070,6 +3128,7 @@ legend {
 }
 
 .member-row > div,
+.feed-row > div,
 .source-result > div,
 .history-row > div,
 .offering-row > div {
@@ -3096,6 +3155,31 @@ legend {
 
 .feed-row {
   align-items: flex-start;
+}
+
+.feed-row-link {
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.feed-row-link:hover {
+  color: var(--green-700);
+  background: var(--green-50);
+}
+
+.feed-row-arrow {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--green-700);
+  transition: transform 150ms ease;
+}
+
+.feed-row-link:hover .feed-row-arrow,
+.feed-row-link:focus-visible .feed-row-arrow {
+  transform: translateX(3px);
 }
 
 .feed-row h3 {
@@ -3163,10 +3247,6 @@ legend {
   color: var(--green-700);
   font-size: 9px;
   font-weight: 720;
-}
-
-.secondary-topics {
-  margin-top: -13px;
 }
 
 .saved-card.unavailable {
@@ -5472,23 +5552,6 @@ textarea::placeholder {
   background: #222822;
 }
 
-.secondary-topics {
-  margin-top: 8px;
-}
-
-.secondary-topics button {
-  min-height: 30px;
-  border-color: transparent;
-  padding-inline: 9px;
-  font-size: 8px;
-}
-
-.secondary-topics button.active {
-  border-color: transparent;
-  color: var(--lime);
-  background: transparent;
-}
-
 .permission-note {
   width: fit-content;
   margin: 14px 0 0;
@@ -7238,22 +7301,6 @@ button.recipe-card.selected {
   box-shadow: inset 0 0 0 1px #343b34;
 }
 
-.explore-channel-row .secondary-topics {
-  padding-left: 10px;
-  border-left: 1px solid var(--line-soft);
-}
-
-.explore-channel-row .secondary-topics button {
-  color: #818a82;
-  padding-inline: 9px;
-}
-
-.explore-channel-row .secondary-topics button.active {
-  color: var(--lime);
-  background: transparent;
-  box-shadow: none;
-}
-
 .explore-channel-row .permission-note {
   flex: 0 0 auto;
   margin: 0 0 0 4px;
@@ -7328,6 +7375,7 @@ dialog.discovery-overlay {
   position: relative;
   display: grid;
   width: min(1180px, 100%);
+  height: min(820px, calc(100dvh - 68px));
   max-height: min(820px, calc(100dvh - 68px));
   grid-template-columns: minmax(0, 1.16fr) minmax(390px, .84fr);
   overflow: hidden;
@@ -7362,7 +7410,7 @@ dialog.discovery-overlay {
 
 .discovery-dialog-visual {
   position: relative;
-  min-height: min(720px, calc(100dvh - 70px));
+  min-height: 0;
   overflow: hidden;
   background-color: #2d372f;
 }
@@ -7404,6 +7452,7 @@ dialog.discovery-overlay {
 .discovery-dialog-copy {
   display: grid;
   min-width: 0;
+  min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
@@ -7932,7 +7981,6 @@ dialog.discovery-overlay {
     gap: 6px;
   }
 
-  .explore-channel-row .secondary-topics,
   .explore-channel-row .permission-note {
     display: none;
   }
@@ -7944,6 +7992,7 @@ dialog.discovery-overlay {
 
   .discovery-dialog {
     width: 100%;
+    height: calc(100dvh - 18px);
     max-height: calc(100dvh - 18px);
     grid-template-columns: 1fr;
     grid-template-rows: minmax(230px, 42dvh) minmax(0, 1fr);

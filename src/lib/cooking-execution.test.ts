@@ -1,10 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   buildExecutionTimeline,
-  clearExecutionProgress,
+  computeExecutionSnapshot,
   initExecutionStates,
-  loadExecutionProgress,
-  saveExecutionProgress,
   type CookingTimelineTask,
 } from './cooking-execution'
 
@@ -13,22 +11,13 @@ const timeline: CookingTimelineTask[] = [
   { taskId: 'task-2', instruction: 'Cook', startMinute: 2 },
 ]
 
-describe('cooking execution persistence', () => {
-  beforeEach(() => localStorage.clear())
+describe('cooking execution projection', () => {
+  it('offers the first pending step from an empty backend state', () => {
+    const states = initExecutionStates(timeline)
+    const snapshot = computeExecutionSnapshot(timeline, states, 0)
 
-  it('restores progress for the same plan and timeline', () => {
-    const states = { ...initExecutionStates(timeline), 'task-1': 'COMPLETED' as const }
-    saveExecutionProgress('plan-1', timeline, states, 2)
-
-    expect(loadExecutionProgress('plan-1', timeline)).toEqual({ states, eventId: 2 })
-  })
-
-  it('rejects stale timeline state and supports explicit reset', () => {
-    saveExecutionProgress('plan-1', timeline, { 'task-1': 'COMPLETED', 'task-2': 'PENDING' }, 1)
-    expect(loadExecutionProgress('plan-1', [{ taskId: 'new-task' }]).eventId).toBe(0)
-
-    clearExecutionProgress('plan-1')
-    expect(loadExecutionProgress('plan-1', timeline)).toEqual({ states: initExecutionStates(timeline), eventId: 0 })
+    expect(snapshot.available.map((task) => task.taskId)).toEqual(['task-1'])
+    expect(snapshot.blocked.map((task) => task.taskId)).toEqual(['task-2'])
   })
 })
 

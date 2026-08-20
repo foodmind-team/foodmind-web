@@ -5,8 +5,8 @@ import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { ToastProvider } from '../components/feedback/ToastProvider'
-import { server } from '../test/server'
 import { parsePreferenceCodes } from '../lib/preference-codes'
+import { server } from '../test/server'
 import { PreferencesPage } from './ProfileRoutes'
 
 const origin = 'http://localhost:3000'
@@ -51,7 +51,48 @@ describe('preferences form', () => {
     expect(parsePreferenceCodes(' vegan, Tree Nut;vegan\nsoy ')).toEqual(['VEGAN', 'TREE_NUT', 'SOY'])
   })
 
-  it('removes unused controls, keeps cuisines exclusive, and submits direct inputs', async () => {
+  it('uses device location without exposing coordinate or area inputs', async () => {
+    const originalGeolocation = navigator.geolocation
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 1.31, longitude: 103.81 } } as GeolocationPosition) },
+    })
+    let submitted: Record<string, unknown> | undefined
+    server.use(
+      http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(preferences)),
+      http.get(`${origin}/api/v1/catalogue/reference-data`, () => HttpResponse.json(reference)),
+      http.put(`${origin}/api/v1/users/me/preferences`, async ({ request }) => {
+        submitted = await request.json() as Record<string, unknown>
+        return HttpResponse.json({ ...preferences, ...submitted, version: 2 })
+      }),
+    )
+
+    try {
+      const user = userEvent.setup()
+      renderPreferences()
+
+      expect(await screen.findByRole('heading', { name: 'Preferences', level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('spinbutton', { name: /latitude/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('spinbutton', { name: /longitude/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /preferred area/i })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /update current location/i }))
+      expect(await screen.findByText('Current location is ready and will be saved with your preferences.')).toBeInTheDocument()
+      const distance = screen.getByRole('spinbutton', { name: /^Maximum distance \(km\)/ })
+      await user.clear(distance)
+      await user.type(distance, '6')
+      await user.click(screen.getByRole('button', { name: /save preferences/i }))
+
+      await waitFor(() => expect(submitted?.preferredLatitude).toBe(1.31))
+      expect(submitted?.preferredLongitude).toBe(103.81)
+      expect(submitted?.maxDistanceKm).toBe(6)
+      expect(submitted?.preferredArea).toBeUndefined()
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', { configurable: true, value: originalGeolocation })
+    }
+  })
+
+  it('removes obsolete controls, keeps cuisines exclusive, and submits direct inputs', async () => {
     let submitted: Record<string, unknown> | undefined
     server.use(
       http.get(`${origin}/api/v1/users/me/preferences`, () => HttpResponse.json(preferences)),
@@ -65,7 +106,7 @@ describe('preferences form', () => {
     renderPreferences()
 
     expect(await screen.findByRole('heading', { name: 'Preferences', level: 1 })).toBeInTheDocument()
-    expect(screen.queryByLabelText('Maximum distance (km)')).not.toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: /^Maximum distance \(km\)/ })).toBeInTheDocument()
     expect(screen.queryByLabelText('Food goal')).not.toBeInTheDocument()
     expect(screen.queryByText('Cleanliness evidence')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Preferred latitude')).not.toBeInTheDocument()
@@ -89,7 +130,8 @@ describe('preferences form', () => {
     await user.type(dietaryInput, 'vegan, pescatarian; vegan')
     await user.clear(allergenInput)
     await user.type(allergenInput, 'peanut, tree nut')
-    await user.click(screen.getByRole('button', { name: /Save preferences/ }))
+    await user.click(screen.getByRole('button', { name: /remove saved location/i }))
+    await user.click(screen.getByRole('button', { name: /save preferences/i }))
 
     await waitFor(() => expect(submitted).toBeDefined())
     expect(submitted).toEqual({
@@ -97,7 +139,6 @@ describe('preferences form', () => {
       budgetMax: 25,
       currency: 'SGD',
       spiceTolerance: 3,
-      preferredArea: 'Central',
       drinkSweetnessPreference: 'LOW',
       drinkIcePreference: 'LESS',
       cookingRegion: 'SG',
@@ -116,6 +157,6 @@ describe('preferences form', () => {
     expect(submitted).not.toHaveProperty('minimumCleanlinessEvidenceScore')
     expect(submitted).not.toHaveProperty('preferredLatitude')
     expect(submitted).not.toHaveProperty('preferredLongitude')
+    expect(submitted).not.toHaveProperty('preferredArea')
   })
 })
-

@@ -63,6 +63,8 @@ const spendingTotals = [
 
 type MockOptions = {
   authenticated?: boolean
+  exploreItems?: unknown[]
+  recordDetail?: unknown
   populated?: boolean
   legacyJoinOnly?: boolean
   preferenceFieldError?: boolean
@@ -72,6 +74,7 @@ type MockOptions = {
   onChatMessage?: (request: PlaywrightRequest) => void
   onCookingGenerate?: (request: PlaywrightRequest) => void
   onMediaDeclaration?: (request: PlaywrightRequest) => void
+  onMediaDelete?: (request: PlaywrightRequest) => void
   onMediaStorage?: (request: PlaywrightRequest) => void
   onRecordCreate?: (request: PlaywrightRequest) => void
 }
@@ -82,6 +85,13 @@ async function fulfill(route: Route, body: unknown, status = 200) {
 
 export async function mockApi(page: Page, options: MockOptions = {}) {
   let chatMessages: unknown[] = []
+  let cookingExecution = {
+    planId: cookingPlan.planId,
+    savedAt: null as string | null,
+    finishedAt: null as string | null,
+    version: 0,
+    steps: [] as Array<{ stepId: string; status: 'IN_PROGRESS' | 'COMPLETED'; updatedAt: string }>,
+  }
   await page.route('https://storage.example.test/**', async (route) => {
     options.onMediaStorage?.(route.request())
     await route.fulfill({ status: 200, body: '' })
@@ -120,9 +130,10 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
       options.onRecordCreate?.(request)
       return fulfill(route, { ...foodRecord, ...request.postDataJSON(), id: id('33'), createdAt: now, updatedAt: now, version: 0 }, 201)
     }
+    if (path === `/food-records/${foodRecord.id}` && method === 'GET') return fulfill(route, options.recordDetail || foodRecord)
     if (path === '/food-records' && method === 'GET') return fulfill(route, { items: options.populated ? [foodRecord] : [], page: 0, size: Number(url.searchParams.get('size') || 20), totalElements: options.populated ? 1 : 0, totalPages: options.populated ? 1 : 0, hasNext: false })
     if (path === '/drink-records' && method === 'GET') return fulfill(route, { items: options.populated ? [drinkRecord] : [], page: 0, size: Number(url.searchParams.get('size') || 20), totalElements: options.populated ? 1 : 0, totalPages: options.populated ? 1 : 0, hasNext: false })
-    if (path === '/explore' && method === 'GET') return fulfill(route, { items: [], nextCursor: null })
+    if (path === '/explore' && method === 'GET') return fulfill(route, { items: options.exploreItems || [], nextCursor: null })
     if (path === '/search' && method === 'GET') return fulfill(route, { items: [], nextCursor: null, page: 0, size: 18, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/want-to-try' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 24, totalElements: 0, totalPages: 0, hasNext: false })
     if (path === '/cooking-plans/history' && method === 'GET') return fulfill(route, { items: [], page: 0, size: 8, totalElements: 0, totalPages: 0, hasNext: false })
@@ -132,6 +143,19 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === '/cooking-plans/generate-async' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, { planId: cookingPlan.planId, taskId: 'task-e2e', status: 'PROCESSING', location: `/api/v1/cooking-plans/${cookingPlan.planId}/task` }, 202) }
     if (path === '/cooking-plans/generate' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, cookingPlan) }
     if (path === `/cooking-plans/${cookingPlan.planId}` && method === 'GET') return fulfill(route, cookingPlan)
+    if (path === `/cooking-plans/${cookingPlan.planId}/execution` && method === 'GET') return fulfill(route, cookingExecution)
+    if (path === `/cooking-plans/${cookingPlan.planId}/execution` && method === 'PATCH') {
+      const update = request.postDataJSON() as { stepId: string; status: 'IN_PROGRESS' | 'COMPLETED'; expectedVersion: number }
+      if (update.expectedVersion !== cookingExecution.version) {
+        return fulfill(route, { code: 'RESOURCE_STATE_CONFLICT', message: 'Progress changed on another device.', fieldErrors: [] }, 409)
+      }
+      cookingExecution = {
+        ...cookingExecution,
+        version: cookingExecution.version + 1,
+        steps: [...cookingExecution.steps.filter((step) => step.stepId !== update.stepId), { stepId: update.stepId, status: update.status, updatedAt: now }],
+      }
+      return fulfill(route, cookingExecution)
+    }
     if (path === '/chat/sessions' && method === 'GET') return fulfill(route, { items: [chatSession], page: 0, size: 50, totalElements: 1, totalPages: 1, hasNext: false })
     if (path === '/chat/sessions' && method === 'POST') return fulfill(route, { ...chatSession, title: request.postDataJSON().title }, 201)
     if (path === `/chat/sessions/${chatSession.id}` && method === 'GET') return fulfill(route, chatSession)
@@ -146,7 +170,7 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
       return fulfill(route, { mediaAssetId, status: 'PENDING', uploadUrl: 'https://storage.example.test/record-image', requiredHeaders: { 'Content-Type': 'image/png' }, expiresAt: '2026-07-31T12:05:00Z' }, 201)
     }
     if (path === `/media/${mediaAssetId}/finalise` && method === 'POST') return fulfill(route, { mediaAssetId, status: 'READY', contentType: 'image/png', byteSize: 5, createdAt: now, finalisedAt: now })
-    if (path === `/media/${mediaAssetId}` && method === 'DELETE') return fulfill(route, undefined, 204)
+    if (path === `/media/${mediaAssetId}` && method === 'DELETE') { options.onMediaDelete?.(request); return fulfill(route, undefined, 204) }
     if (path === '/dashboard' && method === 'GET') return fulfill(route, options.populated
       ? { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', groupBy: 'WEEK', timeZone: 'Asia/Singapore', empty: false, metrics, spendingTotals }
       : { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', groupBy: 'WEEK', timeZone: 'Asia/Singapore', empty: true, metrics: [], spendingTotals: [] })

@@ -1,10 +1,6 @@
-// Local execution-board simulation for the READY cooking plan detail page.
-//
-// The real backend contract has no /cooking-plans/{planId}/execution endpoint,
-// so the execution lanes (available / in progress / completed / blocked) and
-// the expectedEventId optimistic concurrency (409 on stale snapshots) are
-// simulated on-device from the plan timeline. Swapping in a real endpoint later
-// only requires replacing these pure functions with API calls.
+// Pure execution-board projections for the READY cooking plan detail page.
+// Mutable progress and optimistic concurrency live in Backend; these helpers
+// only turn the immutable plan plus the latest account state into UI lanes.
 
 import type { Schema } from './api/client'
 
@@ -21,71 +17,6 @@ export type ExecutionSnapshot = {
   completed: CookingTimelineTask[]
   blocked: ExecutionBlockedTask[]
   expectedEventId: string
-}
-
-export type ExecutionUpdate = {
-  cookingTaskId: string
-  status: 'IN_PROGRESS' | 'COMPLETED'
-  expectedEventId: string
-}
-
-export class ExecutionConflictError extends Error {
-  constructor() {
-    super('EXECUTION_STATE_CONFLICT')
-    this.name = 'ExecutionConflictError'
-  }
-}
-
-type PersistedExecutionProgress = {
-  timelineKey: string
-  eventId: number
-  states: Record<string, LocalTaskState>
-}
-
-function progressStorageKey(planId: string) {
-  return `foodmind:cooking-progress:${planId}:v1`
-}
-
-function timelineKey(timeline: CookingTimelineTask[]) {
-  return orderedTasks(timeline).map((task, index) => taskKey(task, index)).join('|')
-}
-
-export function loadExecutionProgress(
-  planId: string,
-  timeline: CookingTimelineTask[],
-): { states: Record<string, LocalTaskState>; eventId: number } {
-  const initial = { states: initExecutionStates(timeline), eventId: 0 }
-  if (typeof window === 'undefined' || !planId) return initial
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(progressStorageKey(planId)) || 'null') as PersistedExecutionProgress | null
-    if (!parsed || parsed.timelineKey !== timelineKey(timeline) || !Number.isInteger(parsed.eventId) || parsed.eventId < 0) return initial
-    const expectedKeys = Object.keys(initial.states)
-    const actualKeys = Object.keys(parsed.states || {})
-    if (expectedKeys.length !== actualKeys.length || expectedKeys.some((key) => !actualKeys.includes(key))) return initial
-    if (actualKeys.some((key) => !['PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(parsed.states[key]))) return initial
-    return { states: parsed.states, eventId: parsed.eventId }
-  } catch {
-    return initial
-  }
-}
-
-export function saveExecutionProgress(
-  planId: string,
-  timeline: CookingTimelineTask[],
-  states: Record<string, LocalTaskState>,
-  eventId: number,
-) {
-  if (typeof window === 'undefined' || !planId) return
-  window.localStorage.setItem(progressStorageKey(planId), JSON.stringify({
-    timelineKey: timelineKey(timeline),
-    eventId,
-    states,
-  } satisfies PersistedExecutionProgress))
-}
-
-export function clearExecutionProgress(planId: string) {
-  if (typeof window === 'undefined' || !planId) return
-  window.localStorage.removeItem(progressStorageKey(planId))
 }
 
 function taskKey(task: CookingTimelineTask, index: number): string {
@@ -134,7 +65,7 @@ export function buildExecutionTimeline(
     .sort((a, b) => (a.sequenceNo ?? 0) - (b.sequenceNo ?? 0))
     .filter((item) => !prepAlreadyScheduled(item, timeline))
     .map((item, index): CookingTimelineTask => ({
-      taskId: `mise-en-place-${item.sequenceNo ?? index + 1}-${index}`,
+      taskId: `mise:${item.sequenceNo ?? index + 1}`,
       instruction: item.instruction || [item.operation, item.ingredient].filter(Boolean).join(' ') || 'Prepare ingredients',
       startMinute: 0,
       durationMinutes: item.durationMinutes ?? undefined,
@@ -195,27 +126,4 @@ export function computeExecutionSnapshot(
   })
 
   return { available, inProgress, completed, blocked, expectedEventId: `evt-${eventId}` }
-}
-
-export function applyExecutionUpdate(
-  timeline: CookingTimelineTask[],
-  states: Record<string, LocalTaskState>,
-  eventId: number,
-  update: ExecutionUpdate,
-): { states: Record<string, LocalTaskState>; snapshot: ExecutionSnapshot; eventId: number } {
-  if (update.expectedEventId !== `evt-${eventId}`) {
-    throw new ExecutionConflictError()
-  }
-  const snapshot = computeExecutionSnapshot(timeline, states, eventId)
-  const isAllowed = update.status === 'IN_PROGRESS'
-    ? snapshot.available.some((task) => taskKey(task, -1) === update.cookingTaskId || task.taskId === update.cookingTaskId)
-    : snapshot.inProgress.some((task) => task.taskId === update.cookingTaskId)
-  if (!isAllowed) throw new Error('TASK_STATE_INVALID')
-
-  const nextEventId = eventId + 1
-  const nextStates: Record<string, LocalTaskState> = {
-    ...states,
-    [update.cookingTaskId]: update.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'COMPLETED',
-  }
-  return { states: nextStates, snapshot: computeExecutionSnapshot(timeline, nextStates, nextEventId), eventId: nextEventId }
 }
