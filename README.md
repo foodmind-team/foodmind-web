@@ -2,6 +2,10 @@
 
 FoodMind Web is the responsive browser client for recording food experiences, receiving grounded recommendations, deciding what to eat, and feeding outcomes back into the product. It consumes the public FoodMind Backend contract and keeps business rules and authorisation on the server.
 
+## Live demo
+
+Try the deployed application at [https://13.229.2.154.sslip.io/](https://13.229.2.154.sslip.io/). This is the public Web entry point; API requests remain on the same HTTPS origin under `/api/v1`.
+
 ## Features
 
 - Authentication, profile and preference management
