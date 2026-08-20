@@ -131,7 +131,7 @@ test.describe.serial('real FoodMind stack without route interception', () => {
     await page.goto('/records/new')
     await page.getByLabel('Meal name').fill(mediaRecordName)
     await page.getByLabel('Visibility').selectOption('GROUP')
-    await page.getByLabel('Group').selectOption({ label: mediaGroupName })
+    await page.getByLabel('Group', { exact: true }).selectOption({ label: mediaGroupName })
     await page.locator('input[type="file"]').setInputFiles({
       name: 'e2e-record.png',
       mimeType: 'image/png',
