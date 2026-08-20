@@ -585,6 +585,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cooking-plans/{planId}/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add an owned READY plan to Saved. */
+        put: operations["saveCookingPlan"];
+        post?: never;
+        /** Remove an owned plan from Saved without deleting its immutable history. */
+        delete: operations["removeSavedCookingPlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/{planId}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read account-synchronised saved state and execution progress. */
+        get: operations["getCookingPlanExecution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Advance one execution step with optimistic concurrency. */
+        patch: operations["updateCookingPlanExecution"];
+        trace?: never;
+    };
+    "/cooking-plans/{planId}/execution/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset all unfinished execution progress. */
+        post: operations["resetCookingPlanExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cooking-plans/{planId}/finish": {
         parameters: {
             query?: never;
@@ -596,7 +649,7 @@ export interface paths {
         put?: never;
         /**
          * Finish a cooking plan and consume its allocated inventory.
-         * @description Owner-only, idempotent completion of a READY plan. Inventory deductions and finishedAt persistence are atomic; a conflicting inventory change returns 409 without partial deductions.
+         * @description Owner-only, idempotent completion of a READY plan. Inventory deductions, automatic archival of depleted lots, and finishedAt persistence are atomic; a conflicting inventory change returns 409 without partial deductions.
          */
         post: operations["finishCookingPlan"];
         delete?: never;
@@ -657,6 +710,23 @@ export interface paths {
          * @description Returns only the authenticated user's plans using bounded pagination and stable createdAt/id ordering.
          */
         get: operations["listCookingPlanHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cooking-plans/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List explicitly saved cooking plans for the authenticated user. */
+        get: operations["listSavedCookingPlans"];
         put?: never;
         post?: never;
         delete?: never;
@@ -755,7 +825,10 @@ export interface paths {
         /** List active inventory lots for the authenticated user. */
         get: operations["listInventoryLots"];
         put?: never;
-        /** Add a real inventory lot. */
+        /**
+         * Add real inventory or merge it into an existing ingredient entry.
+         * @description Ingredient names are matched after trimming and without case sensitivity. A matching active entry with the same unit is incremented instead of creating a duplicate; incompatible units return 409.
+         */
         post: operations["createInventoryLot"];
         delete?: never;
         options?: never;
@@ -3807,6 +3880,8 @@ export interface components {
              * @description Short-lived authorized image URL; null when media is disabled or unavailable.
              */
             imageUrl?: string | null;
+            /** @description True only when the current user owns the record and may edit or delete it and its media. */
+            canManage: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3900,6 +3975,8 @@ export interface components {
              * @description Short-lived authorized image URL; null when media is disabled or unavailable.
              */
             imageUrl?: string | null;
+            /** @description True only when the current user owns the record and may edit or delete it and its media. */
+            canManage: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -4458,14 +4535,45 @@ export interface components {
             status?: "PROCESSING" | "READY" | "NEEDS_CONFIRMATION" | "INFEASIBLE" | "FAILED";
             sourceCount?: number;
             taskCount?: number;
+            completedStepCount?: number;
             makespanMinutes?: number | null;
+            dishNames?: string[];
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             completedAt?: string | null;
+            /** Format: date-time */
+            savedAt?: string | null;
+            /** Format: date-time */
+            finishedAt?: string | null;
         };
         CookingPlanHistoryResponse: components["schemas"]["PageResponse"] & {
             items?: components["schemas"]["CookingPlanSummary"][];
+        };
+        CookingPlanExecutionUpdateRequest: {
+            stepId: string;
+            /** @enum {string} */
+            status: "IN_PROGRESS" | "COMPLETED";
+            /** Format: int64 */
+            expectedVersion: number;
+        };
+        CookingPlanExecutionStep: {
+            stepId: string;
+            /** @enum {string} */
+            status: "IN_PROGRESS" | "COMPLETED";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CookingPlanExecutionResponse: {
+            /** Format: uuid */
+            planId: string;
+            /** Format: date-time */
+            savedAt?: string | null;
+            /** Format: date-time */
+            finishedAt?: string | null;
+            /** Format: int64 */
+            version: number;
+            steps: components["schemas"]["CookingPlanExecutionStep"][];
         };
         CookingPlanAsyncAcceptedResponse: {
             /** Format: uuid */
@@ -5065,6 +5173,169 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    saveCookingPlan: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted saved state and current execution progress. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanExecutionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    removeSavedCookingPlan: {
+        parameters: {
+            query?: {
+                resetProgress?: boolean;
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan removed from Saved; progress is retained unless resetProgress is true. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanExecutionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getCookingPlanExecution: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current execution snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanExecutionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateCookingPlanExecution: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CookingPlanExecutionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated execution snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanExecutionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    resetCookingPlanExecution: {
+        parameters: {
+            query: {
+                expectedVersion: number;
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty execution snapshot at the next version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanExecutionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     finishCookingPlan: {
         parameters: {
             query?: never;
@@ -5205,6 +5476,38 @@ export interface operations {
             200: {
                 headers: {
                     "X-Correlation-ID": components["headers"]["CorrelationId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CookingPlanHistoryResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listSavedCookingPlans: {
+        parameters: {
+            query?: {
+                /** @description Zero-based page index. */
+                page?: components["parameters"]["Page"];
+                /** @description Bounded page size. */
+                size?: components["parameters"]["Size"];
+            };
+            header?: {
+                /**
+                 * @description Optional client-generated correlation identifier.
+                 * @example postman-correlation-test
+                 */
+                "X-Correlation-ID"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved cooking plan page, newest save first. */
+            200: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {
@@ -5406,7 +5709,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Inventory lot created. */
+            /** @description Inventory entry created or merged; the response identifies the active entry. */
             201: {
                 headers: {
                     /** @description Current lot version. */
@@ -5419,6 +5722,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
         };
     };
     getInventoryLot: {
