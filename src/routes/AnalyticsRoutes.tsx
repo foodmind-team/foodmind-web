@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { EmptyState, ErrorState, LoadingState } from '../components/feedback/States'
 import { api, dataOrThrow, type Schema } from '../lib/api/client'
-import { displayMetricValue, latestMetric, type DashboardMetric } from '../lib/insight-metrics'
+import { aggregateDimensionMetrics, displayMetricValue, latestMetric, type DashboardMetric } from '../lib/insight-metrics'
 import { queryKeys } from '../lib/api/query-keys'
 import { localCalendarDate, localMonday } from '../lib/local-date'
 
@@ -105,7 +105,7 @@ function MetricsView({ metrics, spending }: { metrics: DashboardMetric[]; spendi
   const validSpending = spending.filter((metric) => !metric.empty && metric.value !== null && metric.value !== undefined)
   const spendingRows = pivotByPeriod(validSpending, (metric) => metric.currency || metric.dimension || 'Currency')
   const currencies = [...new Set(validSpending.map((metric) => metric.currency || metric.dimension || 'Currency'))]
-  const cuisineRows = cuisine.map((metric) => ({ name: metric.dimensionLabel || metric.dimension || metric.label, value: metric.value as number, period: metric.period }))
+  const cuisineRows = aggregateDimensionMetrics(cuisine)
 
   return (
     <>
@@ -113,7 +113,7 @@ function MetricsView({ metrics, spending }: { metrics: DashboardMetric[]; spendi
       <div className="analytics-grid">
         <ChartCard title="Food and drink activity" summary="Returned food and drink counts share a time axis so their movement is easy to compare.">{activityRows.length ? <ResponsiveContainer width="100%" height={260}><LineChart data={activityRows}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" /><YAxis /><Tooltip /><Legend />{activitySeries.map((series, index) => <Line type="monotone" dataKey={series} connectNulls={false} isAnimationActive={false} stroke={chartColors[index % chartColors.length]} strokeWidth={3} key={series} />)}</LineChart></ResponsiveContainer> : <p className="chart-empty">No activity data</p>}</ChartCard>
         <ChartCard title="Spending over time" summary="Each currency remains a separate series, so monetary values are never combined.">{spendingRows.length ? <ResponsiveContainer width="100%" height={260}><BarChart data={spendingRows}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" /><YAxis /><Tooltip /><Legend />{currencies.map((currency, index) => <Bar dataKey={currency} name={currency} isAnimationActive={false} fill={chartColors[(index + 1) % chartColors.length]} radius={[6, 6, 0, 0]} key={currency} />)}</BarChart></ResponsiveContainer> : <p className="chart-empty">No spending data</p>}</ChartCard>
-        <ChartCard title="Cuisine mix" summary="Backend cuisine dimensions are shown as parts of the recorded mix.">{cuisineRows.length ? <ResponsiveContainer width="100%" height={280}><PieChart><Pie data={cuisineRows} dataKey="value" nameKey="name" innerRadius={66} isAnimationActive={false} outerRadius={104} paddingAngle={3}>{cuisineRows.map((row, index) => <Cell fill={chartColors[index % chartColors.length]} key={`${row.name}-${row.period}-${index}`} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer> : <p className="chart-empty">No cuisine data</p>}</ChartCard>
+        <ChartCard title="Cuisine mix" summary="Backend cuisine dimensions are shown as parts of the recorded mix.">{cuisineRows.length ? <ResponsiveContainer width="100%" height={280}><PieChart><Pie data={cuisineRows} dataKey="value" nameKey="name" innerRadius={66} isAnimationActive={false} outerRadius={104} paddingAngle={3}>{cuisineRows.map((row, index) => <Cell fill={chartColors[index % chartColors.length]} key={row.dimension} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer> : <p className="chart-empty">No cuisine data</p>}</ChartCard>
         <ChartCard title="Recommendation outcomes" summary="Rates and counts use separate diagram scales so unlike units are never compared as if they were equal."><RecommendationOutcomes metrics={outcomes} /></ChartCard>
       </div>
       <RawDataDisclosure metrics={metrics} spending={spending} />
