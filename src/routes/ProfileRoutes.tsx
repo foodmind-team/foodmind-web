@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, BarChart3, CalendarDays, Check, ChefHat, Clock3, History, LocateFixed, LogOut, MessageCircle, Settings2, Shield, Trash2, UserRound } from 'lucide-react'
+import { ArrowRight, BarChart3, CalendarDays, Check, ChefHat, Clock3, History, LocateFixed, LogOut, MessageCircle, RefreshCw, Settings2, Shield, Trash2, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -87,6 +87,7 @@ export function PreferencesPage() {
   const [locationMessage, setLocationMessage] = useState('No default location saved. Distance filtering is off.')
   const [locationError, setLocationError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
   const { register, handleSubmit, reset, setError, setValue, watch, formState: { errors, isSubmitting } } = useForm<PreferenceForm>({
     defaultValues: { likedCuisineCodes: [], dislikedCuisineCodes: [] },
   })
@@ -154,6 +155,14 @@ export function PreferencesPage() {
     setValue(field, checked ? [...new Set([...selected, code])] : selected.filter((item) => item !== code), { shouldDirty: true })
     if (checked) setValue(oppositeField, opposite.filter((item) => item !== code), { shouldDirty: true })
   }
+  const refreshPreferences = async () => {
+    const refreshed = await preferences.refetch()
+    if (refreshed.data) {
+      setLastSyncedAt(new Date())
+      showToast('Latest preferences loaded from FoodMind.')
+      void queryClient.invalidateQueries({ queryKey: ['recommendations'] })
+    }
+  }
 
   if (preferences.isLoading || reference.isLoading) return <div className="page"><LoadingState label="Loading your preferences…" /></div>
   if (preferences.isError || reference.isError) return <div className="page"><ErrorState error={preferences.error || reference.error} onRetry={() => { void preferences.refetch(); void reference.refetch() }} /></div>
@@ -161,6 +170,7 @@ export function PreferencesPage() {
     <div className="page section-page narrow-page preferences-page">
       <header className="section-page-heading">
         <div><p className="eyebrow">Your constraints and taste</p><h1>Preferences</h1><p>Hard requirements filter first. Soft preferences help FoodMind rank the remaining valid options.</p></div>
+        <div><button className="secondary-action" type="button" disabled={preferences.isFetching} onClick={() => void refreshPreferences()}><RefreshCw size={17} /> {preferences.isFetching ? 'Refreshing…' : 'Refresh from FoodMind'}</button>{lastSyncedAt && <small className="sync-status" role="status">Synced from FoodMind at {lastSyncedAt.toLocaleTimeString()}</small>}</div>
       </header>
       <form className="card-form" onSubmit={submit}>
         <section>

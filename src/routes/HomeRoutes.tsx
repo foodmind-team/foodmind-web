@@ -310,6 +310,19 @@ const reasonLabels: Record<string, string> = {
   CUISINE_MATCH: 'Cuisine match', WITHIN_BUDGET: 'Within budget', SPICE_MATCH: 'Spice match', NEARBY: 'Nearby', NOT_RECENTLY_REPEATED: 'Fresh choice', SIMILAR_USERS_LIKED: 'Similar users liked', SIMILAR_TO_LIKED_MEALS: 'Similar to meals you liked', TRUSTED_GROUP_RATING: 'Trusted group signal', WANT_TO_TRY: 'On your shortlist',
 }
 
+const decisionFactorLabels: Record<string, string> = {
+  SPICE_PREFERENCE: 'Your spice preference',
+  ALLERGEN_AVOIDANCE: 'Your allergen exclusions',
+  CUISINE_PREFERENCE: 'Your liked cuisines',
+  GROUP_MEMBER_RECORDS: 'Authorized group food records',
+}
+
+const decisionModeCopy: Record<string, { title: string; detail: string }> = {
+  DEFAULT: { title: 'A balanced starting point', detail: 'No saved taste or group signal changed this session, so FoodMind used the strongest generally suitable candidates.' },
+  CONSTRAINT_FOCUSED: { title: 'Shaped around your taste and needs', detail: 'Your saved preferences filtered unsafe choices first and helped rank the valid options.' },
+  GROUP_GUIDED: { title: 'Informed by people you trust', detail: 'Authorized group food records contributed evidence without exposing another member\'s identity or private rating.' },
+}
+
 function recordQuery(candidate: RecommendationCandidate, sessionId: string) {
   return new URLSearchParams({
     type: 'food',
@@ -393,6 +406,7 @@ export function RecommendationDetailPage() {
     <div className="page recommendation-page">
       <header className="section-page-heading"><div><p className="eyebrow">Candidate {candidateIndex + 1} of {items.length} · {sentenceCase(candidate.recommendationType)}</p><h1>{candidate.mealName}</h1><p>At {candidate.placeName}{candidate.area ? ` in ${candidate.area}` : ''}</p></div><span className="rank-orbit">#{candidate.rank}</span></header>
       {fallbackUsed && <FallbackBanner message="The model path was unavailable or unsuitable, so FoodMind used its deterministic rules-based recommender." />}
+      {recommendation.data?.decisionProfile && <section className={`decision-profile ${recommendation.data.decisionProfile.mode.toLowerCase().replace('_', '-')}`} aria-label="Why this recommendation set is different"><div><p className="eyebrow">Why this set</p><h2>{decisionModeCopy[recommendation.data.decisionProfile.mode]?.title || sentenceCase(recommendation.data.decisionProfile.mode)}</h2><p>{decisionModeCopy[recommendation.data.decisionProfile.mode]?.detail}</p></div><div className="decision-factor-list">{recommendation.data.decisionProfile.appliedFactors.map((factor) => <span key={factor}><Check size={14} /> {decisionFactorLabels[factor] || sentenceCase(factor)}</span>)}{recommendation.data.decisionProfile.mode === 'DEFAULT' && <span><Sparkles size={14} /> New-user baseline</span>}{recommendation.data.decisionProfile.groupMemberEvidenceCount > 0 && <small>{recommendation.data.decisionProfile.groupMemberEvidenceCount} authorized group record{recommendation.data.decisionProfile.groupMemberEvidenceCount === 1 ? '' : 's'} supported the returned choices.</small>}</div></section>}
       <section className="result-card detailed-result" aria-live="polite">
         <div className="result-visual dynamic" aria-hidden="true"><span>{candidate.mealName.split(/\s+/).slice(0, 2).map((word) => word[0]).join('')}</span><small>{sentenceCase(candidate.recommendationType)}</small></div>
         <div className="result-copy">

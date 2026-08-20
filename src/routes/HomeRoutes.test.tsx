@@ -14,7 +14,7 @@ const groups = [{ id: 'group-1', name: 'Kitchen Table', description: 'Trusted fr
 const references = { cuisines: [], dietaryTags: [], allergens: [], mealTypes: ['DINNER'], placeTypes: [] }
 const preferences = { currency: 'SGD', preferredLatitude: 1.284, preferredLongitude: 103.832, maxDistanceKm: 8, cleanlinessPriority: 0, likedCuisineCodes: [], dislikedCuisineCodes: [], dietaryTagCodes: [], allergens: [], preferredMealTypes: ['DINNER'], hardConstraints: { requiredDietaryTagCodes: [], allergens: [] }, version: 1 }
 const candidate = (index: number) => ({ candidateId: `candidate-${index}`, placeMealId: `place-meal-${index}`, mealId: `meal-${index}`, mealName: index === 1 ? 'Laksa bowl' : 'Soba set', placeId: `place-${index}`, placeName: index === 1 ? 'Green Lane Kitchen' : 'Nori Table', area: 'Tiong Bahru', price: { amount: 18, currency: 'SGD' }, recommendationType: index === 1 ? 'PERSONAL' as const : 'EXPLORATORY' as const, rank: index, modelScore: index === 1 ? 0.91 : 0.82, reasonCodes: ['WITHIN_BUDGET' as const], explanation: 'ML score confirmed from budget and location inputs.' })
-const recommendation = { sessionId: 'session-1', traceId: 'trace-1', status: 'FALLBACK_SUCCEEDED' as const, modelStatus: 'UNAVAILABLE', fallbackStatus: 'SUCCEEDED' as const, fallbackVersion: 'fallback-v1', items: [candidate(1), candidate(2)] }
+const recommendation = { sessionId: 'session-1', traceId: 'trace-1', status: 'FALLBACK_SUCCEEDED' as const, modelStatus: 'UNAVAILABLE', fallbackStatus: 'SUCCEEDED' as const, fallbackVersion: 'fallback-v1', decisionProfile: { mode: 'GROUP_GUIDED' as const, appliedFactors: ['GROUP_MEMBER_RECORDS' as const], groupMemberEvidenceCount: 3 }, items: [candidate(1), candidate(2)] }
 
 function renderRoute(initialEntry: string, page: React.ReactNode, path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -117,6 +117,8 @@ describe('recommendation decision loop', () => {
     expect(screen.getByText('ML match 91%')).toBeInTheDocument()
     expect(screen.getByText('Confirmed ML ranking basis')).toBeInTheDocument()
     expect(screen.queryByText('ML score confirmed from budget and location inputs.')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Informed by people you trust' })).toBeInTheDocument()
+    expect(screen.getByText('3 authorized group records supported the returned choices.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /try another/i }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Soba set', level: 1 })).toBeInTheDocument())
     expect(mutationCalls).toBe(0)
