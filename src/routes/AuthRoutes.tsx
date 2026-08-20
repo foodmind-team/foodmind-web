@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowRight, Leaf, LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowRight, Leaf, LoaderCircle, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
@@ -24,6 +24,17 @@ const registrationSchema = loginSchema.extend({
 type LoginForm = z.infer<typeof loginSchema>
 type RegistrationForm = z.infer<typeof registrationSchema>
 
+const PRIVACY_POLICY_SECTIONS = [
+  { heading: 'What we collect', body: 'We collect your account details (display name and email), the food preferences you set, your meal and cooking history, content you upload, and your location only when you choose to share it.' },
+  { heading: 'How we use your information', body: 'We use this information to personalise recommendations, build cooking plans, keep your records in sync across devices, and improve the FoodMind service.' },
+  { heading: 'Food preferences & history', body: 'Your liked and disliked cuisines, allergens, dietary requirements, meal logs, ratings, saves, skips, and repeats help FoodMind learn what works for you.' },
+  { heading: 'Uploaded content', body: 'Photos and notes you attach to your records are stored to support your history and are only visible to you unless you share them with a group you trust.' },
+  { heading: 'Location data', body: 'Location is used only when you allow it, to filter nearby restaurants and delivery options. We never log your location in access or audit logs.' },
+  { heading: 'Sharing & protection', body: 'We do not sell your personal data. Data is shared only with services that help us run FoodMind, under strict data-protection terms, and within groups you explicitly join.' },
+  { heading: 'Data retention & your rights', body: 'You may access, correct, export, or delete your data at any time. Signing out clears your local private cache, and your tokens are never written to logs.' },
+  { heading: 'Contact', body: 'Questions about this policy or your data can be sent to privacy@foodmind.example.' },
+]
+
 function AuthLayout({ eyebrow, title, support, children }: { eyebrow: string; title: string; support: string; children: React.ReactNode }) {
   return (
     <main className="auth-page">
@@ -42,6 +53,35 @@ function AuthLayout({ eyebrow, title, support, children }: { eyebrow: string; ti
         </div>
       </section>
     </main>
+  )
+}
+
+function PrivacyPolicyDialog({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement | null>(null)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog || dialog.open) return
+    if (typeof dialog.showModal === 'function') dialog.showModal()
+    else dialog.setAttribute('open', '')
+    return () => { if (dialog.open && typeof dialog.close === 'function') dialog.close() }
+  }, [])
+  return (
+    <dialog ref={dialogRef} className="privacy-overlay" aria-labelledby="privacy-dialog-title" onCancel={(event) => { event.preventDefault(); onClose() }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="privacy-dialog">
+        <header className="privacy-dialog-header">
+          <h2 id="privacy-dialog-title">Privacy Policy</h2>
+          <button className="privacy-close" type="button" aria-label="Close privacy policy" autoFocus onClick={onClose}><X size={21} /></button>
+        </header>
+        <div className="privacy-body">
+          {PRIVACY_POLICY_SECTIONS.map((section) => (
+            <section key={section.heading}>
+              <h3>{section.heading}</h3>
+              <p>{section.body}</p>
+            </section>
+          ))}
+        </div>
+      </section>
+    </dialog>
   )
 }
 
@@ -85,6 +125,7 @@ export function RegisterPage() {
   const { register: registerAccount } = useAuth()
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<RegistrationForm>({
     resolver: zodResolver(registrationSchema),
     defaultValues: {
@@ -121,11 +162,12 @@ export function RegisterPage() {
         <label>Time zone<input {...register('timeZone')} aria-invalid={Boolean(errors.timeZone)} />{errors.timeZone && <small>{errors.timeZone.message}</small>}</label>
         <label className="privacy-consent-control">
           <input type="checkbox" {...register('privacyConsentAccepted')} aria-invalid={Boolean(errors.privacyConsentAccepted)} />
-          <span>I agree that FoodMind may collect and use my account details, food preferences and history, uploaded content, and location when I allow it, to provide, protect, and improve the service.</span>
+          <span>I agree that FoodMind may collect and use my account details, food preferences and history, uploaded content, and location when I allow it, to provide, protect, and improve the service.{' '}<button type="button" className="privacy-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPrivacyOpen(true) }}>Read the Privacy Policy</button></span>
         </label>
         {errors.privacyConsentAccepted && <small className="privacy-consent-error" role="alert">{errors.privacyConsentAccepted.message}</small>}
         <button className="generate-button" type="submit" disabled={isSubmitting}>{isSubmitting ? <><LoaderCircle className="spin" size={19} /> Creating account…</> : <>Create account <ArrowRight size={18} /></>}</button>
       </form>
+      {privacyOpen && <PrivacyPolicyDialog onClose={() => setPrivacyOpen(false)} />}
       <p className="auth-switch">Already have an account? <Link to="/login">Sign in</Link></p>
     </AuthLayout>
   )

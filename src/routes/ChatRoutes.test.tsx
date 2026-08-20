@@ -18,10 +18,10 @@ function renderConversation() {
 }
 
 describe('grounded chatbot', () => {
-  it('lets the backend select the route and displays the grounded response', async () => {
+  it('lets the backend select the workflow and displays the grounded response status', async () => {
     const posted = vi.fn()
     let messages: unknown[] = []
-    const assistant = { id: 'assistant-1', sessionId, role: 'ASSISTANT', content: 'Your recent meals are mostly nearby lunch options.', route: 'SUMMARY', responseStatus: 'SUCCEEDED', correlationId: '00000000-0000-4000-8000-000000000099', createdAt: '2026-08-01T12:01:00Z', sources: [] }
+    const assistant = { id: 'assistant-1', sessionId, role: 'ASSISTANT', content: 'Your recent meals are mostly nearby lunch options.', responseStatus: 'SUCCEEDED', correlationId: '00000000-0000-4000-8000-000000000099', createdAt: '2026-08-01T12:01:00Z', sources: [], suggestedQuestions: [], suggestedDestinations: [] }
     server.use(
       http.get(`${origin}/api/v1/chat/sessions`, () => HttpResponse.json({ items: [session], page: 0, size: 50, totalElements: 1, totalPages: 1, hasNext: false })),
       http.get(`${origin}/api/v1/chat/sessions/${sessionId}`, () => HttpResponse.json(session)),
@@ -42,5 +42,6 @@ describe('grounded chatbot', () => {
     await waitFor(() => expect(posted).toHaveBeenCalledWith({ content: 'Summarise my recent meals', referenceIds: [], useSessionReferences: false }))
     expect(posted.mock.calls[0][0]).not.toHaveProperty('route')
     expect(await screen.findByText(assistant.content)).toBeInTheDocument()
+    expect(screen.getByText('Succeeded')).toBeInTheDocument()
   })
 })

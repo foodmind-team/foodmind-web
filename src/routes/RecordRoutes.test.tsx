@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -59,6 +59,7 @@ describe('record detail image', () => {
       groupId: null,
       mediaAssetId: assetId,
       imageUrl,
+      canManage: false,
       createdAt: '2026-08-01T12:00:00Z',
       updatedAt: '2026-08-01T12:00:00Z',
       version: 0,
@@ -69,11 +70,72 @@ describe('record detail image', () => {
 
     expect(image).toHaveAttribute('src', imageUrl)
     expect(image).toHaveAttribute('referrerpolicy', 'no-referrer')
+    expect(screen.queryByRole('button', { name: 'Delete image' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Edit record' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(screen.getByText(/this group record is read-only/i)).toBeInTheDocument()
 
     fireEvent.error(image)
 
     expect(await screen.findByText('Image unavailable')).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: 'Uploaded image for Laksa' })).not.toBeInTheDocument()
+  })
+
+  it('removes an owned image from the detail after the backend confirms deletion', async () => {
+    server.use(
+      http.get(`${origin}/api/v1/food-records/${recordId}`, () => HttpResponse.json({
+        id: recordId,
+        mealNameSnapshot: 'Laksa',
+        occurredAt: '2026-08-01T12:00:00Z',
+        price: null,
+        rating: 4,
+        comment: null,
+        wouldEatAgain: true,
+        visibility: 'GROUP',
+        groupId: 'group-1',
+        mediaAssetId: assetId,
+        imageUrl: 'https://foodmind-private.s3.ap-southeast-1.amazonaws.com/media/record.png',
+        canManage: true,
+        createdAt: '2026-08-01T12:00:00Z',
+        updatedAt: '2026-08-01T12:00:00Z',
+        version: 0,
+      })),
+      http.delete(`${origin}/api/v1/media/${assetId}`, () => new HttpResponse(null, { status: 204 })),
+    )
+
+    renderDetail()
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete image' }))
+    await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Delete image' }))
+
+    expect(await screen.findByText('The stored image asset has been deleted.')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Uploaded image for Laksa' })).not.toBeInTheDocument()
+  })
+})
+
+describe('record detail navigation', () => {
+  it('returns to the originating trusted group', async () => {
+    server.use(http.get(`${origin}/api/v1/food-records/${recordId}`, () => HttpResponse.json({
+      id: recordId,
+      mealNameSnapshot: 'Laksa',
+      occurredAt: '2026-08-01T12:00:00Z',
+      price: null,
+      rating: 4,
+      comment: null,
+      wouldEatAgain: true,
+      visibility: 'GROUP',
+      groupId: 'group-1',
+      canManage: false,
+      createdAt: '2026-08-01T12:00:00Z',
+      updatedAt: '2026-08-01T12:00:00Z',
+      version: 0,
+    })))
+
+    renderDetail('?fromGroup=group-1')
+
+    const backLink = await screen.findByRole('link', { name: 'Back to group' })
+    expect(backLink).toHaveAttribute('href', '/groups/group-1')
+    await userEvent.click(backLink)
+    expect(await screen.findByText('Group workspace opened')).toBeInTheDocument()
   })
 })
 
