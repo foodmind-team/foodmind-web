@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../test/server'
-import { MAX_MEDIA_BYTES, mediaValidationMessage, sha256Hex, uploadRecordMedia } from './media'
+import { MAX_MEDIA_BYTES, mediaValidationMessage, normaliseRecordMedia, sha256Hex, uploadRecordMedia } from './media'
 
 const origin = 'http://localhost:3000'
 const assetId = '00000000-0000-4000-8000-000000000077'
@@ -15,12 +15,58 @@ function imageFile(bytes = new TextEncoder().encode('hello'), type = 'image/png'
   } as File
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
 describe('bounded record media upload', () => {
   it('validates the backend file constraints before requesting an instruction', () => {
-    expect(mediaValidationMessage({ type: 'image/gif', size: 1 })).toContain('JPEG')
     expect(mediaValidationMessage({ type: 'image/png', size: 0 })).toContain('not empty')
     expect(mediaValidationMessage({ type: 'image/webp', size: MAX_MEDIA_BYTES + 1 })).toContain('5 MB')
     expect(mediaValidationMessage({ type: 'image/jpeg', size: MAX_MEDIA_BYTES })).toBeNull()
+  })
+
+  it('transcodes an unsupported image and uploads the final JPEG bytes', async () => {
+    const declarations = vi.fn()
+    const storageBodies = vi.fn()
+    const source = new Blob(['heic-source'], { type: 'image/heic' })
+    const jpeg = new Blob(['converted-jpeg'], { type: 'image/jpeg' })
+    const drawImage = vi.fn()
+    const close = vi.fn()
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 4, height: 3, close }))
+    const createElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName !== 'canvas') return createElement(tagName)
+      return {
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage }),
+        toBlob: (callback: BlobCallback, type?: string, quality?: unknown) => { expect(type).toBe('image/jpeg'); expect(quality).toBe(0.92); callback(jpeg) },
+      } as unknown as HTMLCanvasElement
+    })
+    server.use(
+      http.post(`${origin}/api/v1/media/uploads`, async ({ request }) => {
+        declarations(await request.json())
+        return HttpResponse.json({ mediaAssetId: assetId, status: 'PENDING', uploadUrl: 'https://storage.example.test/converted', requiredHeaders: { 'Content-Type': 'image/jpeg' }, expiresAt: '2026-08-01T12:05:00Z' }, { status: 201 })
+      }),
+      http.put('https://storage.example.test/converted', async ({ request }) => { storageBodies(await request.text()); return new HttpResponse(null, { status: 200 }) }),
+      http.post(`${origin}/api/v1/media/${assetId}/finalise`, () => HttpResponse.json({ mediaAssetId: assetId, status: 'READY', contentType: 'image/jpeg', byteSize: jpeg.size, createdAt: '2026-08-01T12:00:00Z', finalisedAt: '2026-08-01T12:00:01Z' })),
+    )
+
+    await uploadRecordMedia(await normaliseRecordMedia(source))
+
+    expect(declarations).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/jpeg', byteSize: jpeg.size, checksumSha256: await sha256Hex(await jpeg.arrayBuffer()) }))
+    expect(storageBodies).toHaveBeenCalledWith('converted-jpeg')
+    expect(drawImage).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('keeps JPEG, PNG, and WebP blobs unchanged before upload', async () => {
+    for (const type of ['image/jpeg', 'image/png', 'image/webp'] as const) {
+      const source = new Blob([type], { type })
+      await expect(normaliseRecordMedia(source)).resolves.toBe(source)
+    }
   })
 
   it('computes the lowercase SHA-256 checksum required by the API', async () => {
