@@ -85,6 +85,13 @@ async function fulfill(route: Route, body: unknown, status = 200) {
 
 export async function mockApi(page: Page, options: MockOptions = {}) {
   let chatMessages: unknown[] = []
+  let cookingExecution = {
+    planId: cookingPlan.planId,
+    savedAt: null as string | null,
+    finishedAt: null as string | null,
+    version: 0,
+    steps: [] as Array<{ stepId: string; status: 'IN_PROGRESS' | 'COMPLETED'; updatedAt: string }>,
+  }
   await page.route('https://storage.example.test/**', async (route) => {
     options.onMediaStorage?.(route.request())
     await route.fulfill({ status: 200, body: '' })
@@ -136,6 +143,19 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === '/cooking-plans/generate-async' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, { planId: cookingPlan.planId, taskId: 'task-e2e', status: 'PROCESSING', location: `/api/v1/cooking-plans/${cookingPlan.planId}/task` }, 202) }
     if (path === '/cooking-plans/generate' && method === 'POST') { options.onCookingGenerate?.(request); return fulfill(route, cookingPlan) }
     if (path === `/cooking-plans/${cookingPlan.planId}` && method === 'GET') return fulfill(route, cookingPlan)
+    if (path === `/cooking-plans/${cookingPlan.planId}/execution` && method === 'GET') return fulfill(route, cookingExecution)
+    if (path === `/cooking-plans/${cookingPlan.planId}/execution` && method === 'PATCH') {
+      const update = request.postDataJSON() as { stepId: string; status: 'IN_PROGRESS' | 'COMPLETED'; expectedVersion: number }
+      if (update.expectedVersion !== cookingExecution.version) {
+        return fulfill(route, { code: 'RESOURCE_STATE_CONFLICT', message: 'Progress changed on another device.', fieldErrors: [] }, 409)
+      }
+      cookingExecution = {
+        ...cookingExecution,
+        version: cookingExecution.version + 1,
+        steps: [...cookingExecution.steps.filter((step) => step.stepId !== update.stepId), { stepId: update.stepId, status: update.status, updatedAt: now }],
+      }
+      return fulfill(route, cookingExecution)
+    }
     if (path === '/chat/sessions' && method === 'GET') return fulfill(route, { items: [chatSession], page: 0, size: 50, totalElements: 1, totalPages: 1, hasNext: false })
     if (path === '/chat/sessions' && method === 'POST') return fulfill(route, { ...chatSession, title: request.postDataJSON().title }, 201)
     if (path === `/chat/sessions/${chatSession.id}` && method === 'GET') return fulfill(route, chatSession)
