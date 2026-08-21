@@ -74,6 +74,27 @@ Infra checkout with `docker compose down`.
 
 Copy `.env.example`; do not commit `.env.local`. Production middleware rejects invalid media origins rather than widening the browser content-security policy.
 
+## API configuration and credentials
+
+Create `.env.local` from `.env.example` and configure only public origins:
+
+```dotenv
+VITE_APP_ENV=local
+FOODMIND_BACKEND_ORIGIN=http://localhost:8080
+# Leave blank when media is disabled; otherwise use one exact HTTPS S3 origin.
+FOODMIND_MEDIA_ORIGIN=https://<approved-media-host>
+```
+
+`FOODMIND_BACKEND_ORIGIN` is consumed by the Vite development proxy, while the
+browser continues to call same-origin `/api/v1`. There is intentionally no
+frontend API key, Agent token, database credential, OneMap token, LLM key, or
+S3 secret configuration. Login and refresh credentials are issued and held by
+the Backend as HttpOnly cookies; private integrations remain server-side.
+
+For a different local Vite port, add that exact browser origin to the Backend's
+`WEB_ALLOWED_ORIGINS`. Do not prefix a secret with `VITE_`: every `VITE_`
+variable is bundled into client code.
+
 ## API contract
 
 [`contracts/backend-openapi-v1.yaml`](contracts/backend-openapi-v1.yaml) is the committed Backend contract snapshot. After an intentional Backend contract update, refresh it before changing client behaviour:
