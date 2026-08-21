@@ -162,7 +162,7 @@ describe('recommendation decision loop', () => {
     renderRoute('/recommendations/session-1', <RecommendationDetailPage />, '/recommendations/:sessionId')
 
     expect(await screen.findByRole('heading', { name: 'Laksa bowl', level: 1 })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /never recommend this/i }))
+    await userEvent.click(screen.getByRole('button', { name: /reject this/i }))
 
     await waitFor(() => expect(feedbackBody).toEqual({
       eventType: 'REJECTED',
