@@ -34,6 +34,36 @@ Open the URL printed by Vite, normally `http://localhost:5173`.
 
 `FOODMIND_BACKEND_ORIGIN` is read by Vite's development proxy. Browser code calls same-origin `/api/v1`, so do not put a private Agent or inference-service URL into the frontend configuration. For local HTTP authentication, set the Backend's `WEB_COOKIE_SECURE=false` and allow the Vite origin in `WEB_ALLOWED_ORIGINS`.
 
+## Local deployment
+
+For the complete product, start the Backend through
+[FoodMind Infrastructure](https://github.com/foodmind-team/foodmind-infra)
+first. Wait until `http://localhost:8080/actuator/health/readiness` returns
+`UP`; the Web app is then started separately and proxies only to that Backend.
+
+```powershell
+# In foodmind-infra, after copying .env from .env.example:
+docker compose up --build -d --wait
+
+# In a separate foodmind-web checkout:
+Set-Location ..\foodmind-web
+Copy-Item .env.example .env.local
+# Keep FOODMIND_BACKEND_ORIGIN=http://localhost:8080 in .env.local.
+npm ci
+npm run dev
+```
+
+Open the Vite address shown in the terminal, normally
+`http://localhost:5173`. The browser requests same-origin `/api/v1`; Vite
+forwards those calls to the Backend. Do not add database, MinIO, Chatbot,
+Cooking, Recommendation, or Inference URLs to `.env.local`.
+
+If port `5173` is in use, run `npm run dev -- --port <unused-port>` and add
+that exact origin to the Backend's `WEB_ALLOWED_ORIGINS` for a Backend-only
+setup. Use `npm run build && npm run preview` for a local production-style
+check, and stop Vite with `Ctrl+C`; stop the integrated dependencies from the
+Infra checkout with `docker compose down`.
+
 ## Configuration
 
 | Variable | Required for | Notes |

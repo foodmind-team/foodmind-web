@@ -148,7 +148,7 @@ describe('recommendation decision loop', () => {
     expect(feedbackBody).toEqual({ eventType: 'ACCEPTED', candidateId: 'candidate-1' })
   })
 
-  it('confirms a permanent rejection, preserves the session, and advances locally', async () => {
+  it('confirms the Reject this action, preserves the session, and advances locally', async () => {
     let feedbackBody: Record<string, unknown> = {}
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     server.use(
@@ -162,7 +162,7 @@ describe('recommendation decision loop', () => {
     renderRoute('/recommendations/session-1', <RecommendationDetailPage />, '/recommendations/:sessionId')
 
     expect(await screen.findByRole('heading', { name: 'Laksa bowl', level: 1 })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /never recommend this/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^reject this$/i }))
 
     await waitFor(() => expect(feedbackBody).toEqual({
       eventType: 'REJECTED',
