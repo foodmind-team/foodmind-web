@@ -132,7 +132,6 @@ export function DashboardPage() {
     from: searchParams.get('from') || date(-90),
     to: searchParams.get('to') || date(1),
     groupBy: (searchParams.get('groupBy') || 'WEEK') as 'DAY' | 'WEEK' | 'MONTH',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Singapore',
   }
   const dashboard = useQuery({ queryKey: queryKeys.analytics.dashboard(filters), queryFn: async () => dataOrThrow<Schema<'DashboardResponse'>>(await api.GET('/dashboard', { params: { query: filters } })), staleTime: 5 * 60 * 1000 })
   const changeFilter = (key: string, value: string) => { const next = new URLSearchParams(searchParams); next.set(key, value); setSearchParams(next) }
